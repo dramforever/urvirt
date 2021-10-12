@@ -1,4 +1,8 @@
-# Goal
+# 目标
+
+在 HiFive Unmatched 的 riscv64-linux 上模拟运行无修改或尽量少修改的 uCore 和 rCore
+
+# 思路
 
 - 轻量级纯 userspace 模拟运行 xCore
     - 只支持在 riscv64-linux 上运行 riscv64-{u,r}core
