@@ -24,3 +24,40 @@
     - `mmap(2)` 的 `MAP_FIXED_NOREPLACE` flag
 - 驱动
     - Trap “物理”地址的访问，用模拟指令的方法模拟 MMIO
+
+# 实现计划
+
+- 指令模拟的基本框架（能捕获各种指令和异常）
+    - 目前实现：
+        - 加载 stub 到地址空间，`munmap(2)` 所有其它的地址，这样完全接管。
+    - 待实现：
+        - Signal handler
+        - 指令解码
+- seccomp（捕获 ecall）
+- SBI 函数实现（串口，timer）
+- 物理内存的实现
+    - `memfd`
+- RISC-V 指令解码
+- 虚拟内存功能实现
+    - CSR: `satp`
+    - `sfence.vma`
+    - 页表的解析
+    - `SIGSEGV` 捕获
+- 特权级别实现
+- Block device 驱动实现
+
+# 参考资料和笔记
+
+## RISC-V 下 Linux 的虚拟地址空间
+
+<https://www.kernel.org/doc/html/latest/riscv/vm-layout.html>
+
+Sv39 虚拟地址空间只有 &pm;256GB 部分可以使用。Linux 中正的地址给用户态，负的地址给内核态，`mmap(2)` 和 `munmap(2)` 不能碰内核态的空间。
+
+xCore 会不会使用负的地址？
+
+## RVirt
+
+<https://github.com/mit-pdos/RVirt>
+
+M 态运行的 hypervisor，可能能参考很大一部分。
