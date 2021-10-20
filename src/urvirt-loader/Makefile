@@ -1,4 +1,4 @@
 CFLAGS += -O -Wall -Wextra -I ../common
 
 .PHONY: all
-all: rvirt-loader
+all: urvirt-loader

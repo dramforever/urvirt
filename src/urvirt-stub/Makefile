@@ -1,9 +1,9 @@
 CFLAGS += -nostdlib --static-pie -fno-plt -fpie -O -I ../common
 
 .PHONY: all
-all: rvirt-stub.bin rvirt-stub.sym.txt
+all: urvirt-stub.bin urvirt-stub.sym.txt
 
-rvirt-stub.elf: link.ld rvirt-stub.o
+urvirt-stub.elf: link.ld urvirt-stub.o
 	$(LD) --no-dynamic-linker -pie -o $@ -T $^
 
 %.bin: %.elf

@@ -3,7 +3,7 @@
 #include <syscall.h>
 
 #include "common.h"
-#include "rvirt_syscalls.h"
+#include "urvirt_syscalls.h"
 
 void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
     ucontext_t *ucontext = (ucontext_t *) ucontext_voidp;
