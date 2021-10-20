@@ -1,1 +1,7 @@
 .direnv/
+.vscode/
+
+*.o
+*.elf
+*.bin
+*.sym.txt

@@ -2,4 +2,5 @@
 
 mkShell {
   depsBuildBuild = [ qemu ];
+  hardeningDisable = [ "all" ];
 }
