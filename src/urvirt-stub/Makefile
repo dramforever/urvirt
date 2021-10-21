@@ -10,7 +10,7 @@ urvirt-stub.elf: link.ld urvirt-stub.o
 	$(OBJCOPY) -j output -O binary $< $@
 
 %.sym.txt: %.elf
-	riscv64-unknown-linux-gnu-objdump -t $^ > $@
+	$(OBJDUMP) -t $^ > $@
 
 .PHONY: clean
 clean:
