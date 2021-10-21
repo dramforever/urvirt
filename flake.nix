@@ -8,7 +8,7 @@
     devShell.x86_64-linux =
       (import nixpkgs {
         system = "x86_64-linux";
-        crossSystem.config = "riscv64-unknown-linux-gnu";
+        crossSystem.config = "riscv64-unknown-linux-musl";
       }).callPackage ./env.nix {};
   };
 }
