@@ -53,15 +53,15 @@ size_t get_max_va() {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s <stub-image>\n", argv[0]);
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <stub-image> <kernel-image>\n", argv[0]);
         exit(1);
     }
 
-    int img_fd = open(argv[1], O_RDONLY);
+    int stub_img_fd = open(argv[1], O_RDONLY);
 
     struct stat img_stat;
-    fstat(img_fd, &img_stat);
+    fstat(stub_img_fd, &img_stat);
 
     size_t file_size = img_stat.st_size;
 
@@ -73,10 +73,18 @@ int main(int argc, char *argv[]) {
         file_size_up,
         PROT_EXEC | PROT_READ,
         MAP_PRIVATE,
-        img_fd, 0
+        stub_img_fd, 0
     );
 
-    close(img_fd);
+    close(stub_img_fd);
+
+    int kernel_img_fd = open(argv[2], O_RDONLY);
+    fstat(kernel_img_fd, &img_stat);
+
+    size_t kernel_size = img_stat.st_size;
+
+    dup2(kernel_img_fd, KERNEL_FD);
+    close(kernel_img_fd);
 
     size_t max_va = get_max_va();
 
@@ -101,8 +109,7 @@ int main(int argc, char *argv[]) {
     conf->stub_start = stub_addr;
     conf->stub_size = file_size_up;
     conf->max_va = max_va;
-
-    fprintf(stderr, "max_va = %zx\n", max_va);
+    conf->kernel_size = kernel_size;
 
     munmap(conf, CONF_SIZE);
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <unistd.h>
 #include <syscall.h>
 #include <sys/mman.h>
 
@@ -23,4 +24,8 @@ inline int s_sigaltstack(const stack_t * ss, stack_t * oss) {
 
 inline int s_rt_sigaction(int sig, const struct sigaction *act, struct sigaction *oact) {
     return (int) internal_syscall(SYS_rt_sigaction, 4, (uintptr_t) sig, (uintptr_t) act, (uintptr_t) oact, (uintptr_t) 8, /* ... */ 0, 0);
+}
+
+inline ssize_t s_write(int fd, const void *buf, size_t count) {
+    return (ssize_t) internal_syscall(SYS_write, 3, (uintptr_t) fd, (uintptr_t) buf, (uintptr_t) count, /* ... */ 0, 0, 0);
 }

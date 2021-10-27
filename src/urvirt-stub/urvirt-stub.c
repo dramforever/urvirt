@@ -7,10 +7,11 @@
 
 void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
     ucontext_t *ucontext = (ucontext_t *) ucontext_voidp;
+    s_write(1, "Caught signal\n", 14);
     asm("ebreak");
 }
 
-void entrypoint_1(void *sigstack_start) {
+void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
     stack_t new_sigstack;
     new_sigstack.ss_flags = 0;
     new_sigstack.ss_sp = sigstack_start;
@@ -25,12 +26,38 @@ void entrypoint_1(void *sigstack_start) {
     }
     s_rt_sigaction(SIGILL, &sa, NULL);
 
-    // // FIXME: Trick compiler escape analysis to ensure that the structs are actually written to
-    // asm("" : : "m"(new_sigstack), "m"(sa) : );
+    s_mmap(
+        (void *) RAM_START, RAM_SIZE,
+        PROT_READ | PROT_WRITE | PROT_EXEC,
+        MAP_SHARED | MAP_FIXED,
+        RAM_FD, 0
+    );
 
-    asm("wfi");
+    size_t kernel_size_pg = (conf->kernel_size + 4095) & (~ 4095);
 
-    s_exit_group(0);
+    char *kernel = s_mmap(
+        NULL, kernel_size_pg,
+        PROT_READ,
+        MAP_PRIVATE,
+        KERNEL_FD, 0
+    );
+
+    for (size_t i = 0; i < conf->kernel_size; i ++) {
+        ((char *) KERNEL_START)[i] = kernel[i];
+    }
+
+    s_munmap(kernel, kernel_size_pg);
+    s_munmap(conf, CONF_SIZE);
+
+    asm volatile (
+        "jr %[start]\n\t"
+        :
+        : [start] "r"(KERNEL_START)
+        :
+    );
+
+    // Already jumped away
+    __builtin_unreachable();
 }
 
 __attribute__((section(".text.entrypoint")))
@@ -43,6 +70,7 @@ void entrypoint() {
     );
 
     s_munmap((void *) 0, (size_t) conf->stub_start);
+    s_munmap((void *) conf, CONF_SIZE);
 
     conf = (struct urvirt_config *) s_mmap(
         NULL, CONF_SIZE,
@@ -56,6 +84,7 @@ void entrypoint() {
 
     s_munmap((void *) conf, CONF_SIZE);
 
+
     // Set up sigaltstack
     void *sigstack_start = s_mmap(
         NULL, SIGSTACK_SIZE,
@@ -63,16 +92,25 @@ void entrypoint() {
         -1, 0
     );
 
+
+    void *conf_to_entrypoint_1 = (struct urvirt_config *) s_mmap(
+        NULL, CONF_SIZE,
+        PROT_READ | PROT_WRITE, MAP_PRIVATE,
+        CONFIG_FD, 0
+    );
+
     // We have another stack now, jump to another function to use it
 
-    asm(
+    asm volatile (
         "mv sp, %[new_sp]\n\t"
         "mv a0, %[stack_start]\n\t"
+        "mv a1, %[conf]\n\t"
         "tail entrypoint_1\n\t"
         :
         : [new_sp] "r"(sigstack_start + SIGSTACK_SIZE),
-          [stack_start] "r"(sigstack_start)
-        :
+          [stack_start] "r"(sigstack_start),
+          [conf] "r"(conf_to_entrypoint_1)
+        : "a0", "a1"
     );
 
     // Already jumped away
