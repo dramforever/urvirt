@@ -78,9 +78,9 @@ M 态运行的 hypervisor，可能能参考很大一部分。
 
 ## Signal handler 相关踩坑
 
-- `SECCOMP_RET_TRAP` 产生的 `SIGSYS`，传给 handler 的 `ucontext_t` 里的寄存器 `a7` 好像并不是系统调用，需要在 `siginfo_t` 的 `si_syscall` field 里找到。
-- `SECCOMP_RET_TRAP` 产生的 `SIGSYS`，`pc` 已经是系统调用指令后面的指令
-- 把 vdso 给 `munmap(2)` 之后 signal handler 返回的时候会 `SIGSEGV`，因为内核执行 signal handler 的时候将 `ra` 设置为 `__vdso_rt_sigreturn`，也就是恢复栈指针之后要调用系统调用 `rt_sigreturn` 返回到信号发生的地方，所以我们可以复刻一份这个函数然后绕过 vdso 里面的那份（参见 <https://elixir.bootlin.com/linux/latest/source/arch/riscv/kernel/vdso/rt_sigreturn.S#L10>）
+- `SECCOMP_RET_TRAP` 产生的 `SIGSYS`，传给 handler 的 `ucontext_t` 里的寄存器 `a7` 好像并不是系统调用编号，需要在 `siginfo_t` 的 `si_syscall` field 里找到。
+- `SECCOMP_RET_TRAP` 产生的 `SIGSYS`，`pc` 已经是 `ecall`/`c.ecall` 指令后面的指令
+- 把 vdso 给 `munmap(2)` 之后 signal handler 返回的时候会 `SIGSEGV`，因为内核执行 signal handler 的时候将 `ra` 设置为 vdso 里的 `__vdso_rt_sigreturn` 函数的地址，也就是恢复栈指针之后要调用系统调用 `rt_sigreturn` 返回到信号发生的地方，所以我们可以复刻一份这个函数然后绕过 vdso 里面的那份（参见 <https://elixir.bootlin.com/linux/latest/source/arch/riscv/kernel/vdso/rt_sigreturn.S#L10>）
 
 ## C 语言相关踩坑
 
