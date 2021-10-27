@@ -25,8 +25,10 @@ void entrypoint_1(void *sigstack_start) {
     }
     s_rt_sigaction(SIGILL, &sa, NULL);
 
-    // FIXME: Trick compiler escape analysis to ensure that the structs are actually written to
-    asm("" : : "m"(new_sigstack), "m"(sa) : );
+    // // FIXME: Trick compiler escape analysis to ensure that the structs are actually written to
+    // asm("" : : "m"(new_sigstack), "m"(sa) : );
+
+    asm("wfi");
 
     s_exit_group(0);
 }
