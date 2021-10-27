@@ -5,9 +5,43 @@
 #include "common.h"
 #include "urvirt_syscalls.h"
 
+#include "seccomp-bpf.h"
+
+const size_t SBI_SET_TIMER = 0;
+const size_t SBI_CONSOLE_PUTCHAR = 1;
+const size_t SBI_CONSOLE_GETCHAR = 2;
+const size_t SBI_SHUTDOWN = 8;
+
+#define write_log(str) do { s_write(2, "[urvirt] " str "\n", sizeof("[urvirt] " str "\n") - 1); } while(0)
+
+__attribute__((naked)) void handler_wrapper(int sig, siginfo_t *info, void *ucontext_voidp) {
+    asm (
+        "jal handler\n\t"
+        "li a7, %0\n\t"
+        "ecall\n\t"
+        :
+        : "i"(SYS_rt_sigreturn)
+        :
+    );
+}
+
 void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
     ucontext_t *ucontext = (ucontext_t *) ucontext_voidp;
-    s_write(1, "Caught signal\n", 14);
+
+    if (sig == SIGSYS) {
+        size_t which = info->si_syscall;
+
+        if (which == SBI_CONSOLE_PUTCHAR) {
+            s_write(1, &ucontext->uc_mcontext.__gregs[10 /* a0 */], 1);
+            return;
+        } else if (which == SBI_SHUTDOWN) {
+            write_log("SBI Shutdown!");
+            s_exit_group(0);
+            return;
+        }
+    }
+
+    write_log("Don't know how to handle");
     asm("ebreak");
 }
 
@@ -20,11 +54,12 @@ void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
 
     struct sigaction sa;
     sa.sa_flags = SA_SIGINFO;
-    sa.sa_sigaction = handler;
+    sa.sa_sigaction = handler_wrapper;
     for (char *ptr = (char*) &sa.sa_mask; ptr < (char*)(&sa.sa_mask) + sizeof(sigset_t); ptr ++) {
         *ptr = 0;
     }
     s_rt_sigaction(SIGILL, &sa, NULL);
+    s_rt_sigaction(SIGSYS, &sa, NULL);
 
     s_mmap(
         (void *) RAM_START, RAM_SIZE,
@@ -46,8 +81,21 @@ void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
         ((char *) KERNEL_START)[i] = kernel[i];
     }
 
+    struct sock_fprog prog;
+    struct sock_filter filt[32];
+    prog.filter = filt;
+    prog.len = gen_addr_filter((size_t) (conf->stub_start), (size_t) (conf->stub_start + conf->stub_size), filt);
+
+    int ret = s_seccomp(SECCOMP_SET_MODE_FILTER, 0, &prog);
+
+    if (ret < 0) {
+        s_exit_group(1);
+    }
+
     s_munmap(kernel, kernel_size_pg);
     s_munmap(conf, CONF_SIZE);
+
+    write_log("Jumping to kernel ...");
 
     asm volatile (
         "jr %[start]\n\t"
@@ -55,6 +103,8 @@ void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
         : [start] "r"(KERNEL_START)
         :
     );
+
+    asm ("" ::: "memory");
 
     // Already jumped away
     __builtin_unreachable();

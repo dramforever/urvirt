@@ -8,9 +8,12 @@ void clear_bss() {
     }
 }
 
+const char str[] = "I wrote this with SBI calls\n";
+
 void kernel_main() {
     clear_bss();
-    sbi_console_putchar('A');
-    sbi_console_putchar('\n');
+    for (const char *p = str; *p; p ++) {
+        sbi_console_putchar(*p);
+    }
     sbi_shutdown();
 }

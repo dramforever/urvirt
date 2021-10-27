@@ -29,3 +29,7 @@ inline int s_rt_sigaction(int sig, const struct sigaction *act, struct sigaction
 inline ssize_t s_write(int fd, const void *buf, size_t count) {
     return (ssize_t) internal_syscall(SYS_write, 3, (uintptr_t) fd, (uintptr_t) buf, (uintptr_t) count, /* ... */ 0, 0, 0);
 }
+
+inline int s_seccomp(unsigned int operation, unsigned int flags, void *args) {
+    return (int) internal_syscall(SYS_seccomp, 3, (uintptr_t) operation, (uintptr_t) flags, (uintptr_t) args, /* ... */ 0, 0, 0);
+}

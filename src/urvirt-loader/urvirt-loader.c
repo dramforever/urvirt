@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
 
     munmap(conf, CONF_SIZE);
 
-    fprintf(stderr, "Entering stub...\n");
+    fprintf(stderr, "[urvirt] Entering urvirt-stub\n");
     fflush(stdout);
     fflush(stderr);
     ((stub_entrypoint_ptr) stub_addr)();
