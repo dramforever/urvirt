@@ -33,3 +33,7 @@ inline ssize_t s_write(int fd, const void *buf, size_t count) {
 inline int s_seccomp(unsigned int operation, unsigned int flags, void *args) {
     return (int) internal_syscall(SYS_seccomp, 3, (uintptr_t) operation, (uintptr_t) flags, (uintptr_t) args, /* ... */ 0, 0, 0);
 }
+
+inline void s_riscv_flush_icache(uintptr_t start, uintptr_t end, uintptr_t flags) {
+    internal_syscall(SYS_riscv_flush_icache, 3, start, end, flags, /* ... */ 0, 0, 0);
+}

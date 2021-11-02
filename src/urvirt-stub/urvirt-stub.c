@@ -81,6 +81,8 @@ void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
         ((char *) KERNEL_START)[i] = kernel[i];
     }
 
+    s_riscv_flush_icache(0, 0, 0);
+
     struct sock_fprog prog;
     struct sock_filter filt[32];
     prog.filter = filt;
