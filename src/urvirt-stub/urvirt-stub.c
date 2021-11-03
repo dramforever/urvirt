@@ -4,15 +4,8 @@
 
 #include "common.h"
 #include "urvirt_syscalls.h"
-
 #include "seccomp-bpf.h"
-
-const size_t SBI_SET_TIMER = 0;
-const size_t SBI_CONSOLE_PUTCHAR = 1;
-const size_t SBI_CONSOLE_GETCHAR = 2;
-const size_t SBI_SHUTDOWN = 8;
-
-#define write_log(str) do { s_write(2, "[urvirt] " str "\n", sizeof("[urvirt] " str "\n") - 1); } while(0)
+#include "handle-sbi.h"
 
 __attribute__((naked)) void handler_wrapper(int sig, siginfo_t *info, void *ucontext_voidp) {
     asm (
@@ -30,19 +23,16 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
 
     if (sig == SIGSYS) {
         size_t which = info->si_syscall;
-
-        if (which == SBI_CONSOLE_PUTCHAR) {
-            s_write(1, &ucontext->uc_mcontext.__gregs[10 /* a0 */], 1);
-            return;
-        } else if (which == SBI_SHUTDOWN) {
-            write_log("SBI Shutdown!");
-            s_exit_group(0);
-            return;
-        }
+        uintptr_t *regs = ucontext->uc_mcontext.__gregs;
+        struct sbiret ret = handle_sbi_call(
+            which, regs[10], regs[11], regs[12]
+        );
+        regs[10] = ret.error;
+        regs[11] = ret.value;
+    } else {
+        write_log("Don't know how to handle");
+        asm("ebreak");
     }
-
-    write_log("Don't know how to handle");
-    asm("ebreak");
 }
 
 void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {

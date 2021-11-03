@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 #include <syscall.h>
+#include <signal.h>
 #include <sys/mman.h>
 
 #include "internal_syscall.h"
@@ -37,3 +38,5 @@ inline int s_seccomp(unsigned int operation, unsigned int flags, void *args) {
 inline void s_riscv_flush_icache(uintptr_t start, uintptr_t end, uintptr_t flags) {
     internal_syscall(SYS_riscv_flush_icache, 3, start, end, flags, /* ... */ 0, 0, 0);
 }
+
+#define write_log(str) do { s_write(2, "[urvirt] " str "\n", sizeof("[urvirt] " str "\n") - 1); } while(0)
