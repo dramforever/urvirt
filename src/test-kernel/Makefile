@@ -1,4 +1,4 @@
-CFLAGS = -ffreestanding -mcmodel=medany
+CFLAGS = -ffreestanding -mcmodel=medany -O
 
 kernel.bin: kernel.elf
 	$(OBJCOPY) --strip-all -O binary $< $@

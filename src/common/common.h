@@ -19,6 +19,6 @@ struct urvirt_config {
     size_t kernel_size;
 };
 
-const size_t CONF_SIZE = (sizeof(struct urvirt_config) + 4095) & (~ 4095);
+const size_t CONF_SIZE = 4096;
 
 typedef void (*stub_entrypoint_ptr)();

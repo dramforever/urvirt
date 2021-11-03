@@ -6,9 +6,15 @@
 #include "urvirt-syscalls.h"
 #include "seccomp-bpf.h"
 #include "handle-sbi.h"
+#include "riscv-priv.h"
 
 void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
     ucontext_t *ucontext = (ucontext_t *) ucontext_voidp;
+    struct priv_state *priv = (struct priv_state *) s_mmap(
+        NULL, CONF_SIZE,
+        PROT_READ | PROT_WRITE, MAP_SHARED,
+        CONFIG_FD, 0
+    );
 
     if (sig == SIGSYS) {
         size_t which = info->si_syscall;
@@ -18,10 +24,25 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
         );
         regs[10] = ret.error;
         regs[11] = ret.value;
+    } else if (sig == SIGILL) {
+        // Instruction
+        char *pc = (char *) ucontext->uc_mcontext.__gregs[0];
+        if (((*pc) & 0b11) == 0b11 && ((*pc) & 0b11111) != 0b11111) {
+            // 32-bit instruction
+            uint32_t instr = *(uint32_t *) pc;
+            handle_priv_instr(priv, ucontext, instr);
+            // Next instruction
+            ucontext->uc_mcontext.__gregs[0] += 4;
+        } else {
+            write_log("Can't handle in SIGILL");
+            asm("ebreak");
+        }
     } else {
         write_log("Don't know how to handle");
         asm("ebreak");
     }
+
+    s_munmap(priv, CONF_SIZE);
 }
 
 __attribute__((naked)) void handler_wrapper(int sig, siginfo_t *info, void *ucontext_voidp) {
@@ -85,6 +106,10 @@ void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
     }
 
     s_munmap(kernel, kernel_size_pg);
+
+    struct priv_state *priv = (struct priv_state *) conf;
+    initialize_priv(priv);
+
     s_munmap(conf, CONF_SIZE);
 
     write_log("Jumping to kernel ...");
