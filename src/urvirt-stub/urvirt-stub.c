@@ -7,17 +7,6 @@
 #include "seccomp-bpf.h"
 #include "handle-sbi.h"
 
-__attribute__((naked)) void handler_wrapper(int sig, siginfo_t *info, void *ucontext_voidp) {
-    asm (
-        "jal handler\n\t"
-        "li a7, %0\n\t"
-        "ecall\n\t"
-        :
-        : "i"(SYS_rt_sigreturn)
-        :
-    );
-}
-
 void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
     ucontext_t *ucontext = (ucontext_t *) ucontext_voidp;
 
@@ -33,6 +22,17 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
         write_log("Don't know how to handle");
         asm("ebreak");
     }
+}
+
+__attribute__((naked)) void handler_wrapper(int sig, siginfo_t *info, void *ucontext_voidp) {
+    asm (
+        "jal %1\n\t"
+        "li a7, %0\n\t"
+        "ecall\n\t"
+        :
+        : "i"(SYS_rt_sigreturn), "S"(handler)
+        :
+    );
 }
 
 void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
@@ -143,11 +143,12 @@ void entrypoint() {
         "mv sp, %[new_sp]\n\t"
         "mv a0, %[stack_start]\n\t"
         "mv a1, %[conf]\n\t"
-        "tail entrypoint_1\n\t"
+        "tail %[entry]\n\t"
         :
         : [new_sp] "r"(sigstack_start + SIGSTACK_SIZE),
           [stack_start] "r"(sigstack_start),
-          [conf] "r"(conf_to_entrypoint_1)
+          [conf] "r"(conf_to_entrypoint_1),
+          [entry] "S"(entrypoint_1)
         : "a0", "a1"
     );
 
