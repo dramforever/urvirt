@@ -120,12 +120,8 @@ void entrypoint() {
         CONFIG_FD, 0
     );
 
-    if (conf->max_va > (size_t) (conf->stub_start + conf->stub_size)) {
-        s_munmap((void *) (conf->stub_start + conf->stub_size), conf->max_va - ((size_t) conf->stub_start + conf->stub_size));
-    }
-
+    s_munmap((void *) (conf->stub_start + conf->stub_size), (1ull << 38) - ((size_t) conf->stub_start + conf->stub_size));
     s_munmap((void *) conf, CONF_SIZE);
-
 
     // Set up sigaltstack
     void *sigstack_start = s_mmap(

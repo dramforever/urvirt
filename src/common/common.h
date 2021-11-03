@@ -16,7 +16,6 @@ const size_t KERNEL_START = 0x80200000;
 struct urvirt_config {
     void *stub_start;
     size_t stub_size;
-    size_t max_va;
     size_t kernel_size;
 };
 

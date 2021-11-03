@@ -13,45 +13,6 @@
 
 #include "common.h"
 
-size_t get_max_va() {
-    FILE *maps_file = fopen("/proc/self/maps", "r");
-    if (maps_file == 0) {
-        perror("fopen");
-        return 0;
-    }
-    char buf[LINE_MAX];
-
-    size_t addr_top = 0;
-
-    while (fgets(buf, sizeof(buf), maps_file)) {
-        if (buf[strlen(buf) - 1] != '\n') {
-            fprintf(stderr, "Cannot read line\n");
-            fclose(maps_file);
-            return 0;
-        }
-
-        size_t region_begin, region_end;
-        if (sscanf(buf, "%zx-%zx", &region_begin, &region_end) < 2) {
-            fprintf(stderr, "Cannot read line\n");
-            fclose(maps_file);
-            return 0;
-        }
-
-        if (region_end > addr_top) {
-            addr_top = region_end;
-        }
-    }
-
-    if (! feof(maps_file)) {
-        perror("fgets");
-        fclose(maps_file);
-        return 0;
-    }
-
-    fclose(maps_file);
-    return addr_top;
-}
-
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <stub-image> <kernel-image>\n", argv[0]);
@@ -86,8 +47,6 @@ int main(int argc, char *argv[]) {
     dup2(kernel_img_fd, KERNEL_FD);
     close(kernel_img_fd);
 
-    size_t max_va = get_max_va();
-
     int config_fd_orig = memfd_create("config_fd", 0);
     int ram_fd_orig = memfd_create("ram_fd", 0);
 
@@ -108,7 +67,6 @@ int main(int argc, char *argv[]) {
 
     conf->stub_start = stub_addr;
     conf->stub_size = file_size_up;
-    conf->max_va = max_va;
     conf->kernel_size = kernel_size;
 
     munmap(conf, CONF_SIZE);
