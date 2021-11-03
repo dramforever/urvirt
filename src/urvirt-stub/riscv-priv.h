@@ -46,6 +46,8 @@ static const uint32_t RS2_WFI = 0b00101;
 static const uint32_t FUNCT7_SRET = 0b0001000;
 static const uint32_t RS2_SRET = 0b00010;
 
+static const uint32_t FUNCT7_SFENCE_VMA = 0b0001001;
+
 static const uint32_t FUNCT3_NOT_CSR    = 0b000;
 
 static const uint32_t CSR_USE_UIMM   = 0b100;

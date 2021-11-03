@@ -18,7 +18,6 @@ void initialize_priv(struct priv_state *priv) {
 }
 
 uintptr_t read_csr(struct priv_state *priv, uint32_t csr) {
-    write_log("read csr");
     if (csr == CSR_SSCRATCH) {
         return priv->sscratch;
     } else {
@@ -28,7 +27,6 @@ uintptr_t read_csr(struct priv_state *priv, uint32_t csr) {
 }
 
 void write_csr(struct priv_state *priv, uint32_t csr, uintptr_t value) {
-    write_log("write csr");
     if (csr == CSR_SSCRATCH) {
         priv->sscratch = value;
     } else {
@@ -41,7 +39,13 @@ void handle_priv_instr(struct priv_state *priv, ucontext_t *ucontext, uint32_t i
     if (ins_opcode(instr) == OPCODE_SYSTEM) {
         if (ins_funct3(instr) == FUNCT3_NOT_CSR) {
             // Not CSR
-            if (ins_funct7(instr) == FUNCT7_WFI && ins_rs2(instr) == RS2_WFI
+            if (ins_funct7(instr) == FUNCT7_SFENCE_VMA && ins_rd(instr) == 0) {
+
+                write_log("Unimplemented sfence.vma");
+                asm("ebreak");
+
+
+            } else if (ins_funct7(instr) == FUNCT7_WFI && ins_rs2(instr) == RS2_WFI
                 && ins_rs1(instr) == 0 && ins_rd(instr) == 0) {
 
                 // wfi, do nothing
@@ -49,7 +53,7 @@ void handle_priv_instr(struct priv_state *priv, ucontext_t *ucontext, uint32_t i
             } else if (ins_funct7(instr) == FUNCT7_SRET && ins_rs2(instr) == RS2_SRET
                 && ins_rs1(instr) == 0 && ins_rd(instr) == 0) {
 
-                write_log("Unimplemented SRET");
+                write_log("Unimplemented sret");
                 asm("ebreak");
 
             } else {
