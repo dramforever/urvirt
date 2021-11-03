@@ -5,7 +5,7 @@
 #include <signal.h>
 #include <sys/mman.h>
 
-#include "internal_syscall.h"
+#include "internal-syscall.h"
 
 inline void s_exit_group(int status) {
     internal_syscall(SYS_exit_group, 1, (uintptr_t) status, /* ... */ 0, 0, 0, 0, 0);

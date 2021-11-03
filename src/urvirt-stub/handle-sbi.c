@@ -1,7 +1,7 @@
 #include <stdint.h>
 
 #include "handle-sbi.h"
-#include "urvirt_syscalls.h"
+#include "urvirt-syscalls.h"
 
 struct sbiret handle_sbi_call(
     uintptr_t which, uintptr_t arg0, uintptr_t arg1, uintptr_t arg2) {

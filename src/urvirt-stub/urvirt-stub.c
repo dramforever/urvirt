@@ -3,7 +3,7 @@
 #include <syscall.h>
 
 #include "common.h"
-#include "urvirt_syscalls.h"
+#include "urvirt-syscalls.h"
 #include "seccomp-bpf.h"
 #include "handle-sbi.h"
 
