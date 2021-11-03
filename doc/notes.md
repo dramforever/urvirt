@@ -85,3 +85,27 @@ M 态运行的 hypervisor，可能能参考很大一部分。
 ## C 语言相关踩坑
 
 - （存疑）把一个指针 cast 成 `long` 之后 GCC 的 escape analysis 会觉得指针没用了，但是 cast 成 `uintptr_t` 就没事，不太懂。
+
+# 指令模拟
+
+## 指令译码
+
+- RISC-V 特权指令实在太规整了，几乎不需要译码
+
+```text
+                    |          12       |   5   |   3    |   5   |    7    |
+                    |     7     |   5   |
+                    |-----------|-------|-------|--------|-------|---------|
+CSR{RW,RS,RC}       | csr12             | rs1   | funct3 | rd    | 1110011 |
+CSR{RW,RS,RC}I      | csr12             | uimm5 | funct3 | rd    | 1110011 |
+
+SFENCE.VMA          | 0001001   | rs2   | rs1   | 000    | 00000 | 1110011 |
+SRET                | 0001000   | 00010 | 00000 | 000    | 00000 | 1110011 |
+```
+
+
+## CSR 指令的模拟
+
+- OpenSBI 中有一些 CSR 的模拟，实现位于 [`lib/sbi/sbi_illegal_insn.c`][sbi_illegal_insn]，可以参考
+
+[sbi_illegal_insn]: https://github.com/riscv-software-src/opensbi/blob/master/lib/sbi/sbi_illegal_insn.c
