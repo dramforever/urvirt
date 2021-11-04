@@ -2,6 +2,7 @@
 .vscode/
 
 *.o
+*.d
 *.elf
 *.bin
 *.sym.txt

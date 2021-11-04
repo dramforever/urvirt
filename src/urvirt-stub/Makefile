@@ -1,9 +1,12 @@
-CFLAGS += -nostdlib --static-pie -fno-plt -fpie -O -I ../common
+CFLAGS += -MMD -nostdlib --static-pie -fno-plt -fpie -O -I ../common
+
+OBJECTS = urvirt-stub.o seccomp-bpf.o handle-sbi.o riscv-priv.o
+DEPENDS = $(OBJECTS:%.o=%.d)
 
 .PHONY: all
 all: urvirt-stub.bin urvirt-stub.sym.txt
 
-urvirt-stub.elf: link.ld urvirt-stub.o seccomp-bpf.o handle-sbi.o riscv-priv.o
+urvirt-stub.elf: link.ld $(OBJECTS)
 	$(LD) --no-dynamic-linker -pie -o $@ -T $^
 
 %.bin: %.elf
@@ -14,4 +17,6 @@ urvirt-stub.elf: link.ld urvirt-stub.o seccomp-bpf.o handle-sbi.o riscv-priv.o
 
 .PHONY: clean
 clean:
-	rm -f *.o *.bin *.elf *.sym.txt
+	rm -f *.o *.bin *.elf *.sym.txt *.d
+
+-include $(DEPENDS)

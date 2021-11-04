@@ -1,4 +1,11 @@
-CFLAGS += -O -Wall -Wextra -I ../common -static
+CFLAGS += -O -MMD -Wall -Wextra -I ../common -static
+
+OBJECTS = urvirt-loader.o
+DEPENDS = $(OBJECTS:%.o=%.d)
 
 .PHONY: all
 all: urvirt-loader
+
+urvirt-loader: $(OBJECTS)
+
+-include $(DEPENDS)
