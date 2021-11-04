@@ -32,6 +32,10 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
             regs[10] = ret.error;
             regs[11] = ret.value;
         } else {
+            // Fix pc
+            // SIGSYS: pc *after* ecall insn
+            // RISC-V: pc *at* ecall insn
+            regs[0] -= 4;
             enter_trap(priv, ucontext, SCAUSE_UECALL, 0);
         }
     } else if (sig == SIGILL) {
