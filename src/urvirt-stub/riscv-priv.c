@@ -3,7 +3,19 @@
 #include <unistd.h>
 
 #include "riscv-priv.h"
+#include "riscv-bits.h"
+
 #include "urvirt-syscalls.h"
+
+static inline uintptr_t sanitize_stvec(uintptr_t stvec) {
+    uintptr_t mode = stvec & STVEC_MODE_MASK;
+    if (mode == STVEC_DIRECT || mode == STVEC_VECTORED) {
+        return stvec;
+    } else {
+        // Not supported values, WARL
+        return stvec & ~ STVEC_MODE_MASK;
+    }
+}
 
 void initialize_priv(struct priv_state *priv) {
     priv->priv_mode = PRIV_S;
@@ -14,12 +26,24 @@ void initialize_priv(struct priv_state *priv) {
     priv->scause = 0;
     priv->sip = 0;
     priv->satp = 0;
+
+
     priv->sstatus = 0;
+    priv->sstatus = set_sstatus_fs(priv->sstatus, SSTATUS_XS_DIRTY);
+    priv->sstatus = set_sstatus_xs(priv->sstatus, SSTATUS_XS_DIRTY);
+    priv->sstatus = set_sstatus_sd(priv->sstatus, 1);
+    priv->sstatus = set_sstatus_sie(priv->sstatus, 1);
 }
 
 uintptr_t read_csr(struct priv_state *priv, uint32_t csr) {
     if (csr == CSR_SSCRATCH) {
         return priv->sscratch;
+    } else if (csr == CSR_STVEC) {
+        return priv->stvec;
+    } else if (csr == CSR_SEPC) {
+        return priv->sepc;
+    } else if (csr == CSR_SSTATUS) {
+        return priv->sstatus;
     } else {
         write_log("Unimplemented CSR");
         asm("ebreak");
@@ -29,6 +53,14 @@ uintptr_t read_csr(struct priv_state *priv, uint32_t csr) {
 void write_csr(struct priv_state *priv, uint32_t csr, uintptr_t value) {
     if (csr == CSR_SSCRATCH) {
         priv->sscratch = value;
+    } else if (csr == CSR_STVEC) {
+        priv->stvec = sanitize_stvec(value);
+    } else if (csr == CSR_SEPC) {
+        priv->sepc = value;
+    } else if (csr == CSR_SSTATUS) {
+        priv->sstatus =
+            (value & SSTATUS_WRITABLE_MASK)
+            | (priv->sstatus & ~SSTATUS_WRITABLE_MASK);
     } else {
         write_log("Unimplemented CSR");
         asm("ebreak");
@@ -49,13 +81,25 @@ void handle_priv_instr(struct priv_state *priv, ucontext_t *ucontext, uint32_t i
                 && ins_rs1(instr) == 0 && ins_rd(instr) == 0) {
 
                 // wfi, do nothing
+                ucontext->uc_mcontext.__gregs[0] += 4;
 
             } else if (ins_funct7(instr) == FUNCT7_SRET && ins_rs2(instr) == RS2_SRET
                 && ins_rs1(instr) == 0 && ins_rd(instr) == 0) {
+                priv->sstatus = set_sstatus_sie(priv->sstatus, get_sstatus_spie(priv->sstatus));
+                priv->sstatus = set_sstatus_spie(priv->sstatus, 1);
 
-                write_log("Unimplemented sret");
-                asm("ebreak");
+                uintptr_t spp = get_sstatus_spp(priv->sstatus);
 
+                priv->sstatus = set_sstatus_spp(priv->sstatus, 0);
+
+                if (spp == SSTATUS_SPP_U) {
+                    priv->priv_mode = PRIV_U;
+                    priv->should_clear_vm = 1;
+                } else {
+                    priv->priv_mode = PRIV_S;
+                }
+
+                ucontext->uc_mcontext.__gregs[0] = priv->sepc;
             } else {
                 write_log("Invalid instruction: non-CSR");
                 asm("ebreak");
@@ -103,9 +147,44 @@ void handle_priv_instr(struct priv_state *priv, ucontext_t *ucontext, uint32_t i
                 write_log("Invalid csr operation");
                 asm("ebreak");
             }
+
+            ucontext->uc_mcontext.__gregs[0] += 4;
         }
     } else {
         write_log("Invalid instruction: not SYSTEM");
         asm("ebreak");
     }
+}
+
+static inline uintptr_t trap_target(struct priv_state *priv, uintptr_t scause) {
+    uintptr_t base = priv->stvec & ~ STVEC_MODE_MASK;
+    uintptr_t mode = priv->stvec & STVEC_MODE_MASK;
+    if (mode == STVEC_DIRECT || ! (scause & SCAUSE_IS_INT)) {
+        return base;
+    } else {
+        // mode == STVEC_VECTORED
+        return base + scause * 4;
+    }
+}
+
+void enter_trap(struct priv_state *priv, ucontext_t *ucontext, uintptr_t scause, uintptr_t stval) {
+    uintptr_t *regs = ucontext->uc_mcontext.__gregs;
+    priv->sepc = regs[0];
+    priv->scause = scause;
+    priv->stval = stval;
+
+    if (priv->priv_mode == PRIV_S) {
+        priv->sstatus = set_sstatus_spp(priv->sstatus, SSTATUS_SPP_S);
+    } else {
+        priv->sstatus = set_sstatus_spp(priv->sstatus, SSTATUS_SPP_U);
+    }
+
+    priv->priv_mode = PRIV_S;
+
+    priv->sstatus = set_sstatus_spie(priv->sstatus, get_sstatus_sie(priv->sstatus));
+    priv->sstatus = set_sstatus_sie(priv->sstatus, 0);
+
+    regs[0] = trap_target(priv, scause);
+
+    priv->should_clear_vm = 1;
 }

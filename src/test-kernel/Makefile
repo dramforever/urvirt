@@ -1,4 +1,4 @@
-CFLAGS = -MMD -ffreestanding -mcmodel=medany -O
+CFLAGS = -MMD -ffreestanding -mcmodel=medany -I ../common -O
 
 OBJECTS = test-kernel.o entry.o
 DEPENDS = $(OBJECTS:%.o=%.d)

@@ -7,6 +7,7 @@
 #include "seccomp-bpf.h"
 #include "handle-sbi.h"
 #include "riscv-priv.h"
+#include "riscv-bits.h"
 
 void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
     ucontext_t *ucontext = (ucontext_t *) ucontext_voidp;
@@ -17,29 +18,52 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
     );
 
     if (sig == SIGSYS) {
+        // ecall instruction
         size_t which = info->si_syscall;
         uintptr_t *regs = ucontext->uc_mcontext.__gregs;
-        struct sbiret ret = handle_sbi_call(
-            which, regs[10], regs[11], regs[12]
-        );
-        regs[10] = ret.error;
-        regs[11] = ret.value;
-    } else if (sig == SIGILL) {
-        // Instruction
-        char *pc = (char *) ucontext->uc_mcontext.__gregs[0];
-        if (((*pc) & 0b11) == 0b11 && ((*pc) & 0b11111) != 0b11111) {
-            // 32-bit instruction
-            uint32_t instr = *(uint32_t *) pc;
-            handle_priv_instr(priv, ucontext, instr);
-            // Next instruction
-            ucontext->uc_mcontext.__gregs[0] += 4;
+        // Fix a7 register
+        regs[17] = which;
+
+        if (priv->priv_mode == PRIV_S) {
+            // SBI call
+            struct sbiret ret = handle_sbi_call(
+                which, regs[10], regs[11], regs[12]
+            );
+            regs[10] = ret.error;
+            regs[11] = ret.value;
         } else {
-            write_log("Can't handle in SIGILL");
+            enter_trap(priv, ucontext, SCAUSE_UECALL, 0);
+        }
+    } else if (sig == SIGILL) {
+        if (priv->priv_mode == PRIV_S) {
+            // Illegal instruction in S-mode
+            // Maybe emulate privileged instruction?
+
+            char *pc = (char *) ucontext->uc_mcontext.__gregs[0];
+            // Check first byte of instruction
+            // 32-bit insns: last 2 bits are 11, but last 5 bits are not 11111
+            if (((*pc) & 0b11) == 0b11 && ((*pc) & 0b11111) != 0b11111) {
+                // 32-bit instruction
+                uint32_t instr = *(uint32_t *) pc;
+                handle_priv_instr(priv, ucontext, instr);
+            } else {
+                write_log("Can't handle in SIGILL");
+                asm("ebreak");
+            }
+        } else {
+            // Illegal instruction in U-mode
+            // Throw exception to S-mode
+            write_log("Illegal instruction in U-mode");
             asm("ebreak");
         }
     } else {
         write_log("Don't know how to handle");
         asm("ebreak");
+    }
+
+    if (priv->should_clear_vm) {
+        priv->should_clear_vm = 0;
+        // TODO: Clear virtual memory
     }
 
     s_munmap(priv, CONF_SIZE);
@@ -158,7 +182,7 @@ void entrypoint() {
 
     void *conf_to_entrypoint_1 = (struct urvirt_config *) s_mmap(
         NULL, CONF_SIZE,
-        PROT_READ | PROT_WRITE, MAP_PRIVATE,
+        PROT_READ | PROT_WRITE, MAP_SHARED,
         CONFIG_FD, 0
     );
 

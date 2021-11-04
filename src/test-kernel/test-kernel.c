@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+#include "riscv-bits.h"
+
 extern char sbss[], ebss[];
 
 void clear_bss() {
@@ -12,57 +14,51 @@ void clear_bss() {
 
 const char str[] = "I wrote this with SBI calls\n";
 
-void trace(uintptr_t value) {
+__attribute__((naked))
+void stvec() {
     asm(
-        "mv a0, %[src]\n\t"
-        "li a7, 445\n\t"
-        "ecall"
-        :
-        : [src] "r"(value)
-        : "a0", "a7"
+        "addi a0, a0, 1\n\t"
+        "li a7, 1\n\t"
+        "ecall\n\t"
+        "sret\n\t"
     );
 }
 
-void kernel_main() {
-    clear_bss();
-
-    uintptr_t x = 0x1234abcd98760123ull;
-
-    asm(
-        "csrw sscratch, %[data]"
-        :
-        : [data] "r"(x)
-        :
-    );
-
-    uintptr_t a = 0xffff0000abcd1234ull;
-    uintptr_t b;
-
-
-    asm(
-        "csrrw %[dest], sscratch, %[src]"
-        : [dest] "=r"(b)
-        : [src] "r"(a)
-        :
-    );
-
-    uintptr_t c;
-
-    asm(
-        "csrr %[dest], sscratch"
-        : [dest] "=r"(c)
-        :
-        :
-    );
-
-    trace(x);
-    trace(a);
-    trace(b);
-    trace(c);
-
-
-    for (const char *p = str; *p; p ++) {
-        sbi_console_putchar(*p);
+void umode() {
+    while (1) {
+        for (const char *p = str; *p; p ++) {
+            asm(
+                "mv a0, %[data]\n\t"
+                "ecall\n\t"
+                :
+                : [data] "r"((*p) - 1)
+                :
+            );
+        }
     }
-    sbi_shutdown();
+}
+
+void kernel_main() {
+    asm(
+        "csrc sstatus, %[value]"
+        :
+        : [value] "r"(set_sstatus_spp(0, MASK_sstatus_spp))
+        :
+    );
+
+    asm(
+        "csrw stvec, %[value]"
+        :
+        : [value] "r"(stvec)
+        :
+    );
+
+    asm(
+        "csrw sepc, %[value]"
+        :
+        : [value] "r"(umode)
+        :
+    );
+
+    asm("sret");
 }
