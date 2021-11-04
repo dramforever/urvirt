@@ -1,4 +1,5 @@
-CFLAGS += -O -MMD -Wall -Wextra -I ../common -static
+CFLAGS += -O -MMD -Wall -Wextra -I ../common
+LDFLAGS = -static
 
 OBJECTS = urvirt-loader.o
 DEPENDS = $(OBJECTS:%.o=%.d)
