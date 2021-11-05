@@ -59,7 +59,7 @@ void kernel_main() {
     asm(
         "csrc sstatus, %[value]"
         :
-        : [value] "r"(set_sstatus_spp(0, MASK_sstatus_spp))
+        : [value] "r"(MASK_sstatus_spp)
         :
     );
 
