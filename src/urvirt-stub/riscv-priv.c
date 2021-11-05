@@ -23,7 +23,6 @@ void initialize_priv(struct priv_state *priv) {
     priv->stvec = 0;
     priv->sepc = 0;
     priv->scause = 0;
-    priv->scause = 0;
     priv->sip = 0;
     priv->satp = 0;
 
@@ -44,8 +43,14 @@ uintptr_t read_csr(struct priv_state *priv, uint32_t csr) {
         return priv->sepc;
     } else if (csr == CSR_SSTATUS) {
         return priv->sstatus;
+    } else if (csr == CSR_SIE) {
+        return priv->sie;
+    } else if (csr == CSR_SCAUSE) {
+        return priv->scause;
+    } else if (csr == CSR_STVAL) {
+        return priv->stval;
     } else {
-        write_log("Unimplemented CSR");
+        write_log("Unimplemented CSR read");
         asm("ebreak");
     }
 }
@@ -61,8 +66,15 @@ void write_csr(struct priv_state *priv, uint32_t csr, uintptr_t value) {
         priv->sstatus =
             (value & SSTATUS_WRITABLE_MASK)
             | (priv->sstatus & ~SSTATUS_WRITABLE_MASK);
+    } else if (csr == CSR_SIE) {
+        write_log("stub: csr sie");
+        priv->sie = 0;
+    } else if (csr == CSR_SCAUSE) {
+        priv->scause = value;
+    } else if (csr == CSR_STVAL) {
+        priv->stval = value;
     } else {
-        write_log("Unimplemented CSR");
+        write_log("Unimplemented CSR write");
         asm("ebreak");
     }
 }

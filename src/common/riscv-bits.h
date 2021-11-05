@@ -42,6 +42,7 @@ static const uint32_t CSR_OP_RC     = 0b011;
 // CSR numbers
 
 static const uint32_t CSR_SSTATUS   = 0x100;
+static const uint32_t CSR_SIE       = 0x104;
 static const uint32_t CSR_STVEC     = 0x105;
 static const uint32_t CSR_SSCRATCH  = 0x140;
 static const uint32_t CSR_SEPC      = 0x141;
