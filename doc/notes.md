@@ -109,3 +109,30 @@ SRET                | 0001000   | 00010 | 00000 | 000    | 00000 | 1110011 |
 - OpenSBI 中有一些 CSR 的模拟，实现位于 [`lib/sbi/sbi_illegal_insn.c`][sbi_illegal_insn]，可以参考
 
 [sbi_illegal_insn]: https://github.com/riscv-software-src/opensbi/blob/master/lib/sbi/sbi_illegal_insn.c
+
+# 中断
+
+## 中断发生的情况
+
+> An interrupt *i* will be taken if bit *i* is set in both `mip` and `mie`, and if interrupts are globally enabled.
+
+也就是说，例如，如果比如某个时候 `sstatus.SIE = 0`，`sip.STIP = 1`，然后设置 `sstatus.SIE = 1`，此时会发生一个 Supervisor timer interrupt。
+
+```text
+# 1. In user mode, interrupts are enabled
+ecall
+
+# 2. Traps to supervisor mode, interrupts are disabled
+...
+
+# 3. Timer elapses, interrupt not taken
+...
+
+sret
+# 4. Returns to user mode, interrupts are enabled
+# 5. Timer interrupt pending, interrupt taken
+```
+
+## `sip.STIP` 的维护
+
+SBI 的 `set_timer` 维护保证 `sip.STIP = (timecmp <= time)`。
