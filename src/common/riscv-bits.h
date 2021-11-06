@@ -68,6 +68,8 @@ static const uintptr_t STVEC_VECTORED   = 0b01;
 static const uintptr_t SCAUSE_IS_INT    = ((uintptr_t) 1) << 63;
 static const uintptr_t SCAUSE_UECALL    = 8;
 
+static const uintptr_t SCAUSE_TIMER     = SCAUSE_IS_INT | 5;
+
 #define bitfield(name, start, width) \
     static const uintptr_t MASK_##name = (( ((uintptr_t) 1) << width ) - 1) << start;\
     static inline uintptr_t get_##name(uintptr_t data) { \
@@ -106,5 +108,11 @@ static const uintptr_t SSTATUS_WRITABLE_MASK =
     MASK_sstatus_spp |
     MASK_sstatus_spie |
     MASK_sstatus_sie;
+
+// sie and sip related
+
+bitfield(six_sti, 5, 1);
+
+static const uintptr_t SIX_WRITABLE_MASK = MASK_six_sti;
 
 #undef bitfield

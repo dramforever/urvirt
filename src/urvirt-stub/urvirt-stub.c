@@ -1,4 +1,5 @@
 #include <signal.h>
+#include <time.h>
 #include <ucontext.h>
 #include <syscall.h>
 
@@ -27,7 +28,7 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
         if (priv->priv_mode == PRIV_S) {
             // SBI call
             struct sbiret ret = handle_sbi_call(
-                which, regs[10], regs[11], regs[12]
+                priv, which, regs[10], regs[11], regs[12]
             );
             regs[10] = ret.error;
             regs[11] = ret.value;
@@ -60,9 +61,28 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
             write_log("Illegal instruction in U-mode");
             asm("ebreak");
         }
+    } else if (sig == SIGALRM && info->si_code == SI_TIMER) {
+        priv->sip = set_six_sti(priv->sip, 1);
+        if (priv->priv_mode == PRIV_S) {
+            write_log("timer in s mode");
+        } else {
+            write_log("timer in u mode");
+        }
+
     } else {
         write_log("Don't know how to handle");
         asm("ebreak");
+    }
+
+    // Handle interrupt traps
+
+    if (get_six_sti(priv->sip) && get_six_sti(priv->sie) && get_sstatus_sie(priv->sstatus)) {
+        if (priv->priv_mode == PRIV_S) {
+            write_log("timer traps in s mode");
+        } else {
+            write_log("timer traps in u mode");
+        }
+        enter_trap(priv, ucontext, SCAUSE_TIMER, 0);
     }
 
     if (priv->should_clear_vm) {
@@ -91,14 +111,27 @@ void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
     new_sigstack.ss_size = SIGSTACK_SIZE;
     s_sigaltstack(&new_sigstack, NULL);
 
-    struct sigaction sa;
+    struct kernel_sigaction sa;
     sa.sa_flags = SA_SIGINFO;
-    sa.sa_sigaction = handler_wrapper;
+    sa._sa_handler._sa_sigaction = handler_wrapper;
     for (char *ptr = (char*) &sa.sa_mask; ptr < (char*)(&sa.sa_mask) + sizeof(sigset_t); ptr ++) {
         *ptr = 0;
     }
+
+    sa.sa_mask.__bits[0] |= (1 << (SIGALRM - 1));
+
     s_rt_sigaction(SIGILL, &sa, NULL);
     s_rt_sigaction(SIGSYS, &sa, NULL);
+    s_rt_sigaction(SIGALRM, &sa, NULL);
+
+    struct sigevent sev;
+    timer_t timerid;
+
+    sev.sigev_notify = SIGEV_SIGNAL;
+    sev.sigev_signo = SIGALRM;
+    sev.sigev_value.sival_int = 0;
+
+    s_timer_create(CLOCK_REALTIME, &sev, &timerid);
 
     s_mmap(
         (void *) RAM_START, RAM_SIZE,
@@ -137,6 +170,7 @@ void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
 
     struct priv_state *priv = (struct priv_state *) conf;
     initialize_priv(priv);
+    priv->timerid = timerid;
 
     s_munmap(conf, CONF_SIZE);
 

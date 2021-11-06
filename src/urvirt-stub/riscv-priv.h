@@ -3,11 +3,15 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <time.h>
+#include <ucontext.h>
 
 struct priv_state {
     void *stub_start;
     size_t stub_size;
     size_t kernel_size;
+
+    timer_t timerid;
 
     uintptr_t priv_mode;
 

@@ -23,15 +23,14 @@ void initialize_priv(struct priv_state *priv) {
     priv->stvec = 0;
     priv->sepc = 0;
     priv->scause = 0;
-    priv->sip = 0;
     priv->satp = 0;
-
+    priv->sip = 0;
+    priv->sie = 0;
 
     priv->sstatus = 0;
     priv->sstatus = set_sstatus_fs(priv->sstatus, SSTATUS_XS_DIRTY);
     priv->sstatus = set_sstatus_xs(priv->sstatus, SSTATUS_XS_DIRTY);
     priv->sstatus = set_sstatus_sd(priv->sstatus, 1);
-    priv->sstatus = set_sstatus_sie(priv->sstatus, 1);
 }
 
 uintptr_t read_csr(struct priv_state *priv, uint32_t csr) {
@@ -45,6 +44,8 @@ uintptr_t read_csr(struct priv_state *priv, uint32_t csr) {
         return priv->sstatus;
     } else if (csr == CSR_SIE) {
         return priv->sie;
+    } else if (csr == CSR_SIP) {
+        return priv->sip;
     } else if (csr == CSR_SCAUSE) {
         return priv->scause;
     } else if (csr == CSR_STVAL) {
@@ -67,8 +68,13 @@ void write_csr(struct priv_state *priv, uint32_t csr, uintptr_t value) {
             (value & SSTATUS_WRITABLE_MASK)
             | (priv->sstatus & ~SSTATUS_WRITABLE_MASK);
     } else if (csr == CSR_SIE) {
-        write_log("stub: csr sie");
-        priv->sie = 0;
+        priv->sie =
+            (value & SIX_WRITABLE_MASK)
+            | (priv->sie & ~ SIX_WRITABLE_MASK);
+    } else if (csr == CSR_SIP) {
+        priv->sip =
+            (value & SIX_WRITABLE_MASK)
+            | (priv->sip & ~ SIX_WRITABLE_MASK);
     } else if (csr == CSR_SCAUSE) {
         priv->scause = value;
     } else if (csr == CSR_STVAL) {
@@ -97,10 +103,11 @@ void handle_priv_instr(struct priv_state *priv, ucontext_t *ucontext, uint32_t i
 
             } else if (ins_funct7(instr) == FUNCT7_SRET && ins_rs2(instr) == RS2_SRET
                 && ins_rs1(instr) == 0 && ins_rd(instr) == 0) {
-                priv->sstatus = set_sstatus_sie(priv->sstatus, get_sstatus_spie(priv->sstatus));
-                priv->sstatus = set_sstatus_spie(priv->sstatus, 1);
 
                 uintptr_t spp = get_sstatus_spp(priv->sstatus);
+
+                priv->sstatus = set_sstatus_sie(priv->sstatus, get_sstatus_spie(priv->sstatus));
+                priv->sstatus = set_sstatus_spie(priv->sstatus, 1);
 
                 priv->sstatus = set_sstatus_spp(priv->sstatus, 0);
 
