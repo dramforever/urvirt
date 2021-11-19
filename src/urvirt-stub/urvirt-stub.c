@@ -76,12 +76,10 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
 
     // Handle interrupt traps
 
-    if (get_six_sti(priv->sip) && get_six_sti(priv->sie) && get_sstatus_sie(priv->sstatus)) {
-        if (priv->priv_mode == PRIV_S) {
-            write_log("timer traps in s mode");
-        } else {
-            write_log("timer traps in u mode");
-        }
+    if (get_six_sti(priv->sip)
+        && get_six_sti(priv->sie)
+        && (get_sstatus_sie(priv->sstatus) || priv->priv_mode < PRIV_S)) {
+        write_log("timer interrupt taken");
         enter_trap(priv, ucontext, SCAUSE_TIMER, 0);
     }
 

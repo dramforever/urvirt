@@ -21,7 +21,7 @@ struct sbiret handle_sbi_call(
         uintptr_t cur_time;
 
         asm("csrr %0, time" : "=r"(cur_time) : : );
-        uintptr_t delta_ns = (arg0 - cur_time) * 1000;
+        uintptr_t delta_ns = (arg0 - cur_time) * 100;
 
         write_log("Set timer");
 
