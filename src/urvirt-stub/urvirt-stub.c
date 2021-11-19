@@ -205,22 +205,26 @@ void entrypoint() {
         CONFIG_FD, 0
     );
 
+    void *kernel_end = conf->stub_start + conf->stub_size;
+
     s_munmap((void *) (conf->stub_start + conf->stub_size), (1ull << 38) - ((size_t) conf->stub_start + conf->stub_size));
     s_munmap((void *) conf, CONF_SIZE);
 
     // Set up sigaltstack
     void *sigstack_start = s_mmap(
-        NULL, SIGSTACK_SIZE,
+        kernel_end, SIGSTACK_SIZE,
         PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK,
         -1, 0
     );
 
 
-    void *conf_to_entrypoint_1 = (struct urvirt_config *) s_mmap(
+    struct urvirt_config *conf_to_entrypoint_1 = (struct urvirt_config *) s_mmap(
         NULL, CONF_SIZE,
         PROT_READ | PROT_WRITE, MAP_SHARED,
         CONFIG_FD, 0
     );
+
+    conf_to_entrypoint_1->stub_size += SIGSTACK_SIZE;
 
     // We have another stack now, jump to another function to use it
 
