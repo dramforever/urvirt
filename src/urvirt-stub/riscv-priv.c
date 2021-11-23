@@ -5,6 +5,7 @@
 #include "riscv-priv.h"
 #include "riscv-bits.h"
 #include "common.h"
+#include "printf.h"
 
 #include "urvirt-syscalls.h"
 
@@ -84,7 +85,6 @@ void write_csr(struct priv_state *priv, uint32_t csr, uintptr_t value) {
         priv->stval = value;
     } else if (csr == CSR_SATP) {
         if (get_satp_mode(value) == SATP_MODE_SV39 || get_satp_mode(value) == SATP_MODE_BARE) {
-            write_log("Write to satp");
             priv->satp = set_satp_asid(value, 0);
             priv->should_clear_vm = 1;
         }
@@ -100,7 +100,6 @@ void handle_priv_instr(struct priv_state *priv, ucontext_t *ucontext, uint32_t i
             // Not CSR
             if (ins_funct7(instr) == FUNCT7_SFENCE_VMA && ins_rd(instr) == 0) {
 
-                write_log("sfence.vma");
                 priv->should_clear_vm = 1;
                 ucontext->uc_mcontext.__gregs[0] += 4;
 
@@ -112,8 +111,6 @@ void handle_priv_instr(struct priv_state *priv, ucontext_t *ucontext, uint32_t i
 
             } else if (ins_funct7(instr) == FUNCT7_SRET && ins_rs2(instr) == RS2_SRET
                 && ins_rs1(instr) == 0 && ins_rd(instr) == 0) {
-
-                write_log("sret");
 
                 uintptr_t spp = get_sstatus_spp(priv->sstatus);
 
@@ -325,12 +322,12 @@ void handle_page_fault(struct priv_state *priv, ucontext_t *ucontext, uintptr_t 
                         RAM_FD, (ppn << 12) - RAM_START
                     );
                     if ((intptr_t)(res) < 0) {
-                        write_log("mmap failed");
+                        printf("[urvirt] Trying to mmap failed, addr=0x%zx, errno=%d\n", stval, - (int)(intptr_t)(res));
                         asm("ebreak");
                     }
                 }
             } else {
-                write_log("cannot map not-in-ram");
+                printf("[urvirt] Page fault, va=0x%zx, pa=0x%zx, scause=%d is not in RAM, cannot handle\n", stval, pa, scause);
                 asm("ebreak");
             }
         }

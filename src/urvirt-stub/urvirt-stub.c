@@ -9,6 +9,11 @@
 #include "handle-sbi.h"
 #include "riscv-priv.h"
 #include "riscv-bits.h"
+#include "printf.h"
+
+void _putchar(char character) {
+    s_write(2, &character, 1);
+}
 
 void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
     ucontext_t *ucontext = (ucontext_t *) ucontext_voidp;
@@ -52,14 +57,11 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
                 uint32_t instr = *(uint32_t *) pc;
                 handle_priv_instr(priv, ucontext, instr);
             } else {
-                write_log("Can't handle in SIGILL");
+                printf("Can't handle in SIGILL at %p\n", pc);
                 asm("ebreak");
             }
         } else {
-            // Illegal instruction in U-mode
-            // Throw exception to S-mode
-            write_log("Illegal instruction in U-mode");
-            asm("ebreak");
+            enter_trap(priv, ucontext, SCAUSE_ILLEGAL, 0);
         }
     } else if (sig == SIGALRM && info->si_code == SI_TIMER) {
         priv->sip = set_six_sti(priv->sip, 1);
@@ -70,10 +72,8 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
         }
 
     } else if (sig == SIGSEGV) {
-        // write_log("segfault!");
         uintptr_t scause;
         char *pc = (char *) ucontext->uc_mcontext.__gregs[0];
-        s_write(333, "", (size_t) pc);
 
         if (info->si_addr == pc) {
             // TODO: Handle case of load/store current instruction
@@ -105,10 +105,7 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
                     scause = SCAUSE_STORE_PF;
                 } else {
                     scause = SCAUSE_INSTR_PF;
-                    // s_write(instr, "", (size_t) info->si_addr);
-                    // s_write(instr, "", (size_t) pc);
                     write_log("weird 32-bit instruction page fault, assuming instr page fault");
-                    // asm("ebreak");
                 }
             }
         }

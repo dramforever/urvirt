@@ -1,7 +1,8 @@
-CFLAGS += -MMD -nostdlib --static-pie -fno-plt -fpie -O -I ../common
+CFLAGS += -MMD -nostdlib -fno-builtin --static-pie -fno-plt -fpie -O -I ../common
 
-OBJECTS = urvirt-stub.o seccomp-bpf.o handle-sbi.o riscv-priv.o
-DEPENDS = $(OBJECTS:%.o=%.d)
+SOURCES = $(wildcard *.c)
+OBJECTS = $(SOURCES:%.c=%.o)
+DEPENDS = $(SOURCES:%.c=%.d)
 
 .PHONY: all
 all: urvirt-stub.bin urvirt-stub.sym.txt

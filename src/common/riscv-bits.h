@@ -71,6 +71,7 @@ static const uintptr_t STVEC_VECTORED   = 0b01;
 
 static const uintptr_t SCAUSE_IS_INT    = ((uintptr_t) 1) << 63;
 
+static const uintptr_t SCAUSE_ILLEGAL   = 2;
 static const uintptr_t SCAUSE_UECALL    = 8;
 static const uintptr_t SCAUSE_INSTR_PF  = 12;
 static const uintptr_t SCAUSE_LOAD_PF   = 13;
