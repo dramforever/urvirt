@@ -190,7 +190,8 @@ consists of timer interrupts, are:
 - After emulating the instruction that enables interrupts
 
 In any case, I just add a check at the end of the signal handler to take
-interrupt traps if necessary, and just set `sip.STIP` on `SIGALRM`.
+interrupt traps if necessary, and just manage `sip.STIP` with timer stuff. See
+below or more.
 
 ### `satp`
 
@@ -203,6 +204,21 @@ I just implemented like three legacy functions. Don't judge me.
 ### Console functions
 
 ### Timer
+
+```c
+void sbi_set_timer(uint64_t stime_value);
+```
+
+The SBI keeps track of a next-timer-elapse value. Then `sip.STIP` is taken some
+time after `time >= stime_value`.
+
+I just use a Linux `timer_create` timer to make it raise `SIGALRM` on elapse,
+and set `sip.STIP` when I see that. For `sbi_set_timer` I would make sure to
+reset `sip.STIP = (time >= stime_value)`.
+
+However I don't really know how fast and how to translate that to real-world
+time units, so I just use a random scale and take advantage of the fact that
+timer interrupts only need to eventually trap.
 
 ## `satp` and page tables
 
