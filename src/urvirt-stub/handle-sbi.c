@@ -4,15 +4,22 @@
 #include "handle-sbi.h"
 #include "urvirt-syscalls.h"
 
-struct sbiret handle_sbi_call(
+uintptr_t handle_legacy_sbi_call(
     struct priv_state *priv,
     uintptr_t which, uintptr_t arg0, uintptr_t arg1, uintptr_t arg2) {
 
     if (which == SBI_CONSOLE_PUTCHAR) {
         char ch = arg0;
         s_write(1, (void *) &ch, 1);
-        struct sbiret ret = { 0, 0 };
-        return ret;
+        return 0;
+    } else if (which == SBI_CONSOLE_GETCHAR) {
+        char ch;
+        int res = s_read(0, (void *) &ch, 1);
+        if (res < 1) {
+            write_log("error in read");
+            asm("ebreak");
+        }
+        return ch;
     } else if (which == SBI_SHUTDOWN) {
         write_log("SBI Shutdown!");
         s_exit_group(0);
@@ -34,16 +41,9 @@ struct sbiret handle_sbi_call(
 
         priv->sip = set_six_sti(priv->sip, arg0 <= cur_time);
 
-        struct sbiret ret = { 0, 0 };
-        return ret;
-    } else if (which == SBI_CONSOLE_GETCHAR) {
-        char ch;
-        s_read(STDIN_FILENO, &ch, 1);
-        struct sbiret ret = { 0, ch };
-        return ret;
-    } else {
+        return 0;
+    }  else {
         write_log("Unhandled sbi call");
-        struct sbiret ret = { SBI_ERR_NOT_SUPPORTED, 0 };
-        return ret;
+        return SBI_ERR_NOT_SUPPORTED;
     }
 }

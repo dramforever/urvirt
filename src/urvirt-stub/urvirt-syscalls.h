@@ -61,7 +61,7 @@ inline int s_timer_settime(timer_t timerid, int flags,
 }
 
 inline ssize_t s_read(int fd, void *buf, size_t count) {
-    internal_syscall(SYS_read, 3, (uintptr_t) fd, (uintptr_t) buf, (uintptr_t) count, /* ... */ 0, 0, 0);
+    return internal_syscall(SYS_read, 3, (uintptr_t) fd, (uintptr_t) buf, (uintptr_t) count, /* ... */ 0, 0, 0);
 }
 
 

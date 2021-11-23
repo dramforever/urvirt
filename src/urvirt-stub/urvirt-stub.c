@@ -26,12 +26,12 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
         regs[17] = which;
 
         if (priv->priv_mode == PRIV_S) {
-            // SBI call
-            struct sbiret ret = handle_sbi_call(
+            // SBI call, only legacy ones for now
+            uintptr_t ret = handle_legacy_sbi_call(
                 priv, which, regs[10], regs[11], regs[12]
             );
-            regs[10] = ret.error;
-            regs[11] = ret.value;
+
+            regs[10] = ret;
         } else {
             // Fix pc
             // SIGSYS: pc *after* ecall insn

@@ -23,6 +23,6 @@ static const uintptr_t SBI_CONSOLE_PUTCHAR = 1;
 static const uintptr_t SBI_CONSOLE_GETCHAR = 2;
 static const uintptr_t SBI_SHUTDOWN = 8;
 
-struct sbiret handle_sbi_call(
+uintptr_t handle_legacy_sbi_call(
     struct priv_state *priv,
     uintptr_t which, uintptr_t arg0, uintptr_t arg1, uintptr_t arg2);
