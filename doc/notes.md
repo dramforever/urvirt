@@ -136,3 +136,7 @@ sret
 ## `sip.STIP` 的维护
 
 SBI 的 `set_timer` 维护保证 `sip.STIP = (timecmp <= time)`。
+
+## 中断和特权级的关系
+
+Interrupts for lower-privilege modes, `w < x`, are always globally disabled regardless of the setting of any global `wIE` bit for the lower-privilege mode. Interrupts for higher-privilege modes, `y > x`, are always globally enabled regardless of the setting of the global `yIE` bit for the higher-privilege mode.

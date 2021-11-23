@@ -69,6 +69,52 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
             write_log("timer in u mode");
         }
 
+    } else if (sig == SIGSEGV) {
+        // write_log("segfault!");
+        uintptr_t scause;
+        char *pc = (char *) ucontext->uc_mcontext.__gregs[0];
+        s_write(333, "", (size_t) pc);
+
+        if (info->si_addr == pc) {
+            // TODO: Handle case of load/store current instruction
+            scause = SCAUSE_INSTR_PF;
+        } else {
+            if (((*pc) & 0b11) != 0b11) {
+                uint16_t instr = *((uint16_t *) pc);
+
+                // FIXME: Refactor this instruction detection logic
+                if (rvc_looks_like_load(instr)) {
+                    scause = SCAUSE_LOAD_PF;
+                } else if (rvc_looks_like_store(instr)) {
+                    scause = SCAUSE_STORE_PF;
+                } else {
+                    scause = SCAUSE_INSTR_PF;
+                    write_log("weird 16-bit instruction page fault, assuming instr page fault");
+                    // asm("ebreak");
+                }
+
+            } else {
+                uint32_t instr = *((uint32_t *) pc);
+
+                char opcode = (*pc) & 0b1111111;
+                if (opcode == OPCODE_LOAD) {
+                    scause = SCAUSE_LOAD_PF;
+                } else if (opcode == OPCODE_STORE) {
+                    scause = SCAUSE_STORE_PF;
+                } else if (opcode == OPCODE_AMO) {
+                    scause = SCAUSE_STORE_PF;
+                } else {
+                    scause = SCAUSE_INSTR_PF;
+                    // s_write(instr, "", (size_t) info->si_addr);
+                    // s_write(instr, "", (size_t) pc);
+                    write_log("weird 32-bit instruction page fault, assuming instr page fault");
+                    // asm("ebreak");
+                }
+            }
+        }
+
+        uintptr_t addr = (uintptr_t)(info->si_addr);
+        handle_page_fault(priv, ucontext, scause, addr);
     } else {
         write_log("Don't know how to handle");
         asm("ebreak");
@@ -85,7 +131,10 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
 
     if (priv->should_clear_vm) {
         priv->should_clear_vm = 0;
-        // TODO: Clear virtual memory
+        size_t safe_begin = (size_t) priv->stub_start;
+        size_t safe_end = (size_t) priv->stub_start + priv->stub_size;
+        s_munmap((void *) 0, safe_begin);
+        s_munmap((void *) safe_end, (1ull << 38) - safe_end);
     }
 
     s_munmap(priv, CONF_SIZE);
@@ -110,7 +159,7 @@ void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
     s_sigaltstack(&new_sigstack, NULL);
 
     struct kernel_sigaction sa;
-    sa.sa_flags = SA_SIGINFO;
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
     sa._sa_handler._sa_sigaction = handler_wrapper;
     for (char *ptr = (char*) &sa.sa_mask; ptr < (char*)(&sa.sa_mask) + sizeof(sigset_t); ptr ++) {
         *ptr = 0;
@@ -121,6 +170,7 @@ void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
     s_rt_sigaction(SIGILL, &sa, NULL);
     s_rt_sigaction(SIGSYS, &sa, NULL);
     s_rt_sigaction(SIGALRM, &sa, NULL);
+    s_rt_sigaction(SIGSEGV, &sa, NULL);
 
     struct sigevent sev;
     timer_t timerid;
@@ -213,7 +263,7 @@ void entrypoint() {
     // Set up sigaltstack
     void *sigstack_start = s_mmap(
         kernel_end, SIGSTACK_SIZE,
-        PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK,
+        PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_FIXED,
         -1, 0
     );
 

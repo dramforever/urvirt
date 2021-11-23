@@ -25,9 +25,10 @@ struct priv_state {
     uintptr_t sie;
     uintptr_t satp;
 
-    _Bool should_clear_vm;
+    bool should_clear_vm;
 };
 
 void initialize_priv(struct priv_state *priv);
 void handle_priv_instr(struct priv_state *priv, ucontext_t *ucontext, uint32_t instr);
 void enter_trap(struct priv_state *priv, ucontext_t *ucontext, uintptr_t scause, uintptr_t stval);
+void handle_page_fault(struct priv_state *priv, ucontext_t *ucontext, uintptr_t scause, uintptr_t stval);

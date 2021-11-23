@@ -4,6 +4,7 @@
 
 #include "riscv-priv.h"
 #include "riscv-bits.h"
+#include "common.h"
 
 #include "urvirt-syscalls.h"
 
@@ -50,6 +51,8 @@ uintptr_t read_csr(struct priv_state *priv, uint32_t csr) {
         return priv->scause;
     } else if (csr == CSR_STVAL) {
         return priv->stval;
+    } else if (csr == CSR_SATP) {
+        return priv->satp;
     } else {
         write_log("Unimplemented CSR read");
         asm("ebreak");
@@ -79,6 +82,12 @@ void write_csr(struct priv_state *priv, uint32_t csr, uintptr_t value) {
         priv->scause = value;
     } else if (csr == CSR_STVAL) {
         priv->stval = value;
+    } else if (csr == CSR_SATP) {
+        if (get_satp_mode(value) == SATP_MODE_SV39 || get_satp_mode(value) == SATP_MODE_BARE) {
+            write_log("Write to satp");
+            priv->satp = set_satp_asid(value, 0);
+            priv->should_clear_vm = 1;
+        }
     } else {
         write_log("Unimplemented CSR write");
         asm("ebreak");
@@ -91,9 +100,9 @@ void handle_priv_instr(struct priv_state *priv, ucontext_t *ucontext, uint32_t i
             // Not CSR
             if (ins_funct7(instr) == FUNCT7_SFENCE_VMA && ins_rd(instr) == 0) {
 
-                write_log("Unimplemented sfence.vma");
-                asm("ebreak");
-
+                write_log("sfence.vma");
+                priv->should_clear_vm = 1;
+                ucontext->uc_mcontext.__gregs[0] += 4;
 
             } else if (ins_funct7(instr) == FUNCT7_WFI && ins_rs2(instr) == RS2_WFI
                 && ins_rs1(instr) == 0 && ins_rd(instr) == 0) {
@@ -103,6 +112,8 @@ void handle_priv_instr(struct priv_state *priv, ucontext_t *ucontext, uint32_t i
 
             } else if (ins_funct7(instr) == FUNCT7_SRET && ins_rs2(instr) == RS2_SRET
                 && ins_rs1(instr) == 0 && ins_rd(instr) == 0) {
+
+                write_log("sret");
 
                 uintptr_t spp = get_sstatus_spp(priv->sstatus);
 
@@ -206,4 +217,124 @@ void enter_trap(struct priv_state *priv, ucontext_t *ucontext, uintptr_t scause,
     regs[0] = trap_target(priv, scause);
 
     priv->should_clear_vm = 1;
+}
+
+static bool lookup_pa_in_ram(struct priv_state *priv, void *ram, uintptr_t va, uintptr_t *pa, uint64_t *pte) {
+    if (get_satp_mode(priv->satp) == SATP_MODE_BARE) {
+        *pa = va;
+        *pte = 0;
+        return true;
+    }
+
+    intptr_t va_signed = va;
+    // Check virtual address sign extension
+    if (va_signed != (va_signed << (63 - 39) >> (63 - 39)))
+        return false;
+
+    uintptr_t off = get_va_off(va);
+    uintptr_t vpn[3] = { get_va_ppn0(va), get_va_ppn1(va), get_va_ppn2(va) };
+
+    uintptr_t pt_addr = get_satp_ppn(priv->satp) << 12;
+
+    for (int level = 0; level < 3; level ++) {
+        if (pt_addr < RAM_START || pt_addr >= RAM_START + RAM_SIZE) {
+            write_log("pt address out of range");
+            asm("ebreak");
+            return false;
+        }
+
+        uint64_t entry = *(uint64_t *)(ram + (pt_addr - RAM_START) + (vpn[level] * 8));
+
+#define fl(f) (get_pte_flags(entry) & PTE_##f)
+
+        if (! fl(V)) return false;
+        if ((! fl(R)) && fl(W)) return false;
+
+        if (level < 2) {
+            // Should be pointer to next level page table
+            if (fl(R) || fl(W) || fl(X)) {
+                write_log("Unimplemented large pages");
+                asm("ebreak");
+                return false;
+            }
+
+            pt_addr = get_pte_ppn(entry) << 12;
+        } else {
+            if (fl(W) && ! fl(R)) {
+                return false;
+            }
+            *pa = (get_pte_ppn(entry) << 12) | get_va_off(va);
+            *pte = entry;
+            return true;
+        }
+
+#undef fl
+
+    }
+}
+
+bool lookup_pa(struct priv_state *priv, uintptr_t va, uintptr_t *pa, uint64_t *pte) {
+    void *ram = s_mmap(
+        NULL, RAM_SIZE,
+        PROT_READ | PROT_WRITE | PROT_EXEC,
+        MAP_SHARED,
+        RAM_FD, 0
+    );
+
+    bool res = lookup_pa_in_ram(priv, ram, va, pa, pte);
+
+    s_munmap(ram, RAM_SIZE);
+
+    return res;
+}
+
+void handle_page_fault(struct priv_state *priv, ucontext_t *ucontext, uintptr_t scause, uintptr_t stval) {
+    uintptr_t pa;
+    uint64_t pte;
+    bool found = lookup_pa(priv, stval, &pa, &pte);
+    if (found) {
+        if (pte == 0) {
+            // No translation
+            write_log("someone turned off translation");
+            asm("ebreak");
+        } else {
+            uintptr_t ppn = get_pte_ppn(pte);
+            if (pa >= RAM_START && pa < RAM_START + RAM_SIZE) {
+                int flags = 0;
+
+                if ((scause == SCAUSE_INSTR_PF && ! (get_pte_flags(pte) & PTE_X))
+                    || (scause == SCAUSE_LOAD_PF && ! (get_pte_flags(pte) & PTE_R))
+                    || (scause == SCAUSE_STORE_PF && ! (get_pte_flags(pte) & PTE_W))) {
+                    // Permission denied
+                    if (priv->priv_mode == PRIV_S) {
+                        write_log("page permission denied in s mode");
+                        asm("ebreak");
+                    } else {
+                        write_log("page permission denied in u mode");
+                    }
+                    enter_trap(priv, ucontext, scause, stval);
+                } else {
+                    if (get_pte_flags(pte) & PTE_R) flags |= PROT_READ;
+                    if (get_pte_flags(pte) & PTE_W) flags |= PROT_WRITE;
+                    if (get_pte_flags(pte) & PTE_X) flags |= PROT_EXEC;
+
+                    void *res = s_mmap(
+                        (void *) (((uintptr_t) stval) & ~((1 << 12) - 1)), 4096,
+                        flags,
+                        MAP_SHARED | MAP_FIXED_NOREPLACE,
+                        RAM_FD, (ppn << 12) - RAM_START
+                    );
+                    if ((intptr_t)(res) < 0) {
+                        write_log("mmap failed");
+                        asm("ebreak");
+                    }
+                }
+            } else {
+                write_log("cannot map not-in-ram");
+                asm("ebreak");
+            }
+        }
+    } else {
+        enter_trap(priv, ucontext, scause, stval);
+    }
 }

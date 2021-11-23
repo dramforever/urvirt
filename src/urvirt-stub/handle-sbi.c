@@ -21,7 +21,7 @@ struct sbiret handle_sbi_call(
         uintptr_t cur_time;
 
         asm("csrr %0, time" : "=r"(cur_time) : : );
-        uintptr_t delta_ns = (arg0 - cur_time) * 100;
+        uintptr_t delta_ns = (arg0 - cur_time) * 1000000;
 
         write_log("Set timer");
 
@@ -33,6 +33,14 @@ struct sbiret handle_sbi_call(
         s_timer_settime(priv->timerid, 0, &spec, NULL);
 
         priv->sip = set_six_sti(priv->sip, arg0 <= cur_time);
+
+        struct sbiret ret = { 0, 0 };
+        return ret;
+    } else if (which == SBI_CONSOLE_GETCHAR) {
+        char ch;
+        s_read(STDIN_FILENO, &ch, 1);
+        struct sbiret ret = { 0, ch };
+        return ret;
     } else {
         write_log("Unhandled sbi call");
         struct sbiret ret = { SBI_ERR_NOT_SUPPORTED, 0 };

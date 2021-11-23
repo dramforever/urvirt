@@ -60,5 +60,9 @@ inline int s_timer_settime(timer_t timerid, int flags,
     internal_syscall(SYS_timer_settime, 4, (uintptr_t) timerid, (uintptr_t) flags, (uintptr_t) new_value, (uintptr_t) old_value, /* ... */ 0, 0);
 }
 
+inline ssize_t s_read(int fd, void *buf, size_t count) {
+    internal_syscall(SYS_read, 3, (uintptr_t) fd, (uintptr_t) buf, (uintptr_t) count, /* ... */ 0, 0, 0);
+}
+
 
 #define write_log(str) do { s_write(2, "[urvirt] " str "\n", sizeof("[urvirt] " str "\n") - 1); } while(0)
