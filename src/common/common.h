@@ -14,9 +14,9 @@ static const size_t SIGSTACK_SIZE = 4096;
 static const size_t KERNEL_START = 0x80200000;
 
 struct urvirt_config {
-    void *stub_start;
-    size_t stub_size;
-    size_t kernel_size;
+    void *stub_start;   // Start address of the stub
+    size_t stub_size;   // Number of bytes the stub takes up
+    size_t kernel_size; // Number of bytes of the kernel file
 };
 
 static const size_t CONF_SIZE = 4096;

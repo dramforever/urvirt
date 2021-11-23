@@ -38,6 +38,7 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
 
             regs[10] = ret;
         } else {
+            // It's ecall in U-mode, trap to S-mode
             // Fix pc
             // SIGSYS: pc *after* ecall insn
             // RISC-V: pc *at* ecall insn
@@ -138,8 +139,17 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
 }
 
 __attribute__((naked)) void handler_wrapper(int sig, siginfo_t *info, void *ucontext_voidp) {
+    // This bit of rt_sigreturn(2) code is normally in the vDSO [1] as
+    // `__vdso_rt_sigreturn`. Unfortunately we unmapped it earlier so now we
+    // need to provide it ourselves.
+    //
+    // [1]: https://elixir.bootlin.com/linux/latest/source/arch/riscv/kernel/vdso/rt_sigreturn.S
+
     asm (
+        // `ra` would point to `__vdso_rt_sigreturn` at this point, but it's unusable
         "jal %1\n\t"
+
+        // So we make do with our own fake bit of trampoline that is a copy of `__vdso_rt_sigreturn`
         "li a7, %0\n\t"
         "ecall\n\t"
         :
@@ -149,6 +159,8 @@ __attribute__((naked)) void handler_wrapper(int sig, siginfo_t *info, void *ucon
 }
 
 void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
+    // Set up signal handlers, including new stack and sigmasks
+
     stack_t new_sigstack;
     new_sigstack.ss_flags = 0;
     new_sigstack.ss_sp = sigstack_start;
@@ -169,6 +181,8 @@ void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
     s_rt_sigaction(SIGALRM, &sa, NULL);
     s_rt_sigaction(SIGSEGV, &sa, NULL);
 
+    // Set up timer to cause SIGALRM when elapses
+
     struct sigevent sev;
     timer_t timerid;
 
@@ -178,12 +192,16 @@ void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
 
     s_timer_create(CLOCK_REALTIME, &sev, &timerid);
 
+    // At startup, no address translation is done, so map RAM to bare address
+
     s_mmap(
         (void *) RAM_START, RAM_SIZE,
         PROT_READ | PROT_WRITE | PROT_EXEC,
         MAP_SHARED | MAP_FIXED,
         RAM_FD, 0
     );
+
+    // Copy the kernel to RAM
 
     size_t kernel_size_pg = (conf->kernel_size + 4095) & (~ 4095);
 
@@ -200,6 +218,8 @@ void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
 
     s_riscv_flush_icache(0, 0, 0);
 
+    // Set up and enable Seccomp filters
+
     struct sock_fprog prog;
     struct sock_filter filt[32];
     prog.filter = filt;
@@ -213,12 +233,16 @@ void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
 
     s_munmap(kernel, kernel_size_pg);
 
+    // Initialize priv_state
+
     struct priv_state *priv = (struct priv_state *) conf;
     initialize_priv(priv);
     priv->timerid = timerid;
 
+    // Unmap everything that's not the kernel and not the stub
     s_munmap(conf, CONF_SIZE);
 
+    // Here we go
     write_log("Jumping to kernel ...");
 
     asm volatile (
@@ -236,6 +260,9 @@ void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
 
 __attribute__((section(".text.entrypoint")))
 void entrypoint() {
+    // Juggle around memory maps so that we end up unmapping everything that's
+    // not the stub, i.e. ourselves.
+
     // Get urvirt_config
     struct urvirt_config *conf = (struct urvirt_config *) s_mmap(
         NULL, CONF_SIZE,
@@ -257,7 +284,7 @@ void entrypoint() {
     s_munmap((void *) (conf->stub_start + conf->stub_size), (1ull << 38) - ((size_t) conf->stub_start + conf->stub_size));
     s_munmap((void *) conf, CONF_SIZE);
 
-    // Set up sigaltstack
+    // Set up the stack to use, as well as the stack the later part of the initialization needs
     void *sigstack_start = s_mmap(
         kernel_end, SIGSTACK_SIZE,
         PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_FIXED,

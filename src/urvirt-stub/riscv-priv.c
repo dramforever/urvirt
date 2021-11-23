@@ -100,6 +100,7 @@ void handle_priv_instr(struct priv_state *priv, ucontext_t *ucontext, uint32_t i
             // Not CSR
             if (ins_funct7(instr) == FUNCT7_SFENCE_VMA && ins_rd(instr) == 0) {
 
+                // sfence.vma
                 priv->should_clear_vm = 1;
                 ucontext->uc_mcontext.__gregs[0] += 4;
 
@@ -112,6 +113,7 @@ void handle_priv_instr(struct priv_state *priv, ucontext_t *ucontext, uint32_t i
             } else if (ins_funct7(instr) == FUNCT7_SRET && ins_rs2(instr) == RS2_SRET
                 && ins_rs1(instr) == 0 && ins_rd(instr) == 0) {
 
+                // sret
                 uintptr_t spp = get_sstatus_spp(priv->sstatus);
 
                 priv->sstatus = set_sstatus_sie(priv->sstatus, get_sstatus_spie(priv->sstatus));
@@ -216,6 +218,7 @@ void enter_trap(struct priv_state *priv, ucontext_t *ucontext, uintptr_t scause,
     priv->should_clear_vm = 1;
 }
 
+// This is the page table walker. It's ugly. Sorry.
 static bool lookup_pa_in_ram(struct priv_state *priv, void *ram, uintptr_t va, uintptr_t *pa, uint64_t *pte) {
     if (get_satp_mode(priv->satp) == SATP_MODE_BARE) {
         *pa = va;
@@ -322,16 +325,23 @@ void handle_page_fault(struct priv_state *priv, ucontext_t *ucontext, uintptr_t 
                         RAM_FD, (ppn << 12) - RAM_START
                     );
                     if ((intptr_t)(res) < 0) {
+                        // Linux mmap(2) does not like us mapping like literally half the address in Sv39 space.
+                        //
+                        // Honestly, not much we can do with that.
                         printf("[urvirt] Trying to mmap failed, addr=0x%zx, errno=%d\n", stval, - (int)(intptr_t)(res));
                         asm("ebreak");
                     }
                 }
             } else {
+
+                // MMIO accesses would go here, had we implemented them
                 printf("[urvirt] Page fault, va=0x%zx, pa=0x%zx, scause=%d is not in RAM, cannot handle\n", stval, pa, scause);
                 asm("ebreak");
             }
         }
     } else {
+
+        // Looks like we got a real page fault
         enter_trap(priv, ucontext, scause, stval);
     }
 }
