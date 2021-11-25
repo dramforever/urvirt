@@ -2,6 +2,7 @@
 #include <time.h>
 #include <ucontext.h>
 #include <syscall.h>
+#include <fcntl.h>
 
 #include "common.h"
 #include "urvirt-syscalls.h"
@@ -159,6 +160,9 @@ __attribute__((naked)) void handler_wrapper(int sig, siginfo_t *info, void *ucon
 }
 
 void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
+    // Set stdin to non-blocking
+    s_fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
+
     // Set up signal handlers, including new stack and sigmasks
 
     stack_t new_sigstack;

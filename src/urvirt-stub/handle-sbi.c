@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <errno.h>
 
 #include "riscv-bits.h"
 #include "handle-sbi.h"
@@ -15,11 +16,14 @@ uintptr_t handle_legacy_sbi_call(
     } else if (which == SBI_CONSOLE_GETCHAR) {
         char ch;
         int res = s_read(0, (void *) &ch, 1);
-        if (res < 1) {
+        if (res == -EWOULDBLOCK) {
+            return 0;
+        } else if (res < 1) {
             write_log("error in read");
             asm("ebreak");
+        } else {
+            return ch;
         }
-        return ch;
     } else if (which == SBI_SHUTDOWN) {
         write_log("SBI Shutdown!");
         s_exit_group(0);

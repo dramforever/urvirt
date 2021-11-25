@@ -64,5 +64,8 @@ inline ssize_t s_read(int fd, void *buf, size_t count) {
     return internal_syscall(SYS_read, 3, (uintptr_t) fd, (uintptr_t) buf, (uintptr_t) count, /* ... */ 0, 0, 0);
 }
 
+inline int s_fcntl(int fd, int cmd, int arg) {
+    return internal_syscall(SYS_fcntl, 3, (uintptr_t) fd, (uintptr_t) cmd, (uintptr_t) arg, /* ... */ 0, 0, 0);
+}
 
 #define write_log(str) do { s_write(2, "[urvirt] " str "\n", sizeof("[urvirt] " str "\n") - 1); } while(0)
