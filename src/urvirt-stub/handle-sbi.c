@@ -32,7 +32,7 @@ uintptr_t handle_legacy_sbi_call(
         uintptr_t cur_time;
 
         asm("csrr %0, time" : "=r"(cur_time) : : );
-        uintptr_t delta_ns = (arg0 - cur_time) * 10000;
+        uintptr_t delta_ns = (arg0 - cur_time) * 1000;
 
         write_log("Set timer");
 

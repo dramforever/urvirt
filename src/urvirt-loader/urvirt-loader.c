@@ -14,8 +14,8 @@
 #include "common.h"
 
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        fprintf(stderr, "Usage: %s <stub-image> <kernel-image>\n", argv[0]);
+    if (argc != 4) {
+        fprintf(stderr, "Usage: %s <stub-image> <kernel-image> <fs-img>\n", argv[0]);
         exit(1);
     }
 
@@ -58,6 +58,10 @@ int main(int argc, char *argv[]) {
 
     close(config_fd_orig);
     close(ram_fd_orig);
+
+    int block_fd_orig = open(argv[3], O_RDWR);
+    dup2(block_fd_orig, BLOCK_FD);
+    close(block_fd_orig);
 
     struct urvirt_config *conf = (struct urvirt_config *) mmap(
         NULL, CONF_SIZE,

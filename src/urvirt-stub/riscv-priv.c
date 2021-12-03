@@ -6,6 +6,7 @@
 #include "riscv-bits.h"
 #include "common.h"
 #include "printf.h"
+#include "urvirt-block.h"
 
 #include "urvirt-syscalls.h"
 
@@ -288,6 +289,46 @@ bool lookup_pa(struct priv_state *priv, uintptr_t va, uintptr_t *pa, uint64_t *p
     return res;
 }
 
+static inline int decode_sd(char *pc) {
+    if ((*pc) & 0b11 == 0b11) {
+        uint32_t instr = *(uint32_t *) pc;
+
+        if (ins_opcode(instr) == OPCODE_STORE) {
+            if (ins_funct3(instr) == 0b011) {
+                return ins_rs2(instr);
+            } else {
+                return -1;
+            }
+        }
+    } else {
+        uint16_t instr = *(uint16_t *) pc;
+
+        uint16_t op = instr & 0b11;
+        uint16_t funct3 = instr >> 13;
+
+        if (op == 0b00 && funct3 == 0b111) {
+            // c.sd
+            return ((instr >> 2) & 0b111) | 8;
+        } else if (op == 0b10 && funct3 == 0b011) {
+            // c.sdsp
+            return (instr >> 2) & 0b11111;
+        } else {
+            return -1;
+        }
+    }
+}
+
+static inline bool get_store_data(ucontext_t *ucontext, uintptr_t *data) {
+    uintptr_t pc = ucontext->uc_mcontext.__gregs[0];
+    int rs2 = decode_sd((char *) pc);
+    if (rs2 >= 0) {
+        *data = ucontext->uc_mcontext.__gregs[rs2];
+        return true;
+    } else {
+        return false;
+    }
+}
+
 void handle_page_fault(struct priv_state *priv, ucontext_t *ucontext, uintptr_t scause, uintptr_t stval) {
     uintptr_t pa;
     uint64_t pte;
@@ -333,10 +374,52 @@ void handle_page_fault(struct priv_state *priv, ucontext_t *ucontext, uintptr_t 
                     }
                 }
             } else {
+                uintptr_t pc = ucontext->uc_mcontext.__gregs[0];
 
-                // MMIO accesses would go here, had we implemented them
-                printf("[urvirt] Page fault, va=0x%zx, pa=0x%zx, scause=%d is not in RAM, cannot handle\n", stval, pa, scause);
-                asm("ebreak");
+                uintptr_t store_data;
+
+                if (scause == SCAUSE_STORE_PF) {
+                    if (! get_store_data(ucontext, &store_data)) {
+                        printf("[urvirt] Failed to get MMIO store data\n");
+                        asm("ebreak");
+                    }
+                }
+
+                if (pa == URVIRT_BLOCK + URVIRT_BLOCK_COMMAND && scause == SCAUSE_STORE_PF) {
+                    printf("[urvirt] urvirt block command %zd, block_id=%zd, buf=0x%zx\n",
+                        store_data, priv->urvb_block_id, priv->urvb_buf);
+                    if (store_data == URVIRT_BLOCK_CMD_READ) {
+                        s_pread64(BLOCK_FD, (void *) priv->urvb_buf, URVIRT_BLOCK_SIZE, URVIRT_BLOCK_SIZE * priv->urvb_block_id);
+                    } else if (store_data == URVIRT_BLOCK_CMD_WRITE) {
+                        s_pwrite64(BLOCK_FD, (const void *) priv->urvb_buf, URVIRT_BLOCK_SIZE, URVIRT_BLOCK_SIZE * priv->urvb_block_id);
+                    } else {
+                        asm("ebreak");
+                    }
+                    if ((*(char *) pc) & 0b11 == 0b11)
+                        ucontext->uc_mcontext.__gregs[0] += 4;
+                    else
+                        ucontext->uc_mcontext.__gregs[0] += 2;
+
+                } else if (pa == URVIRT_BLOCK + URVIRT_BLOCK_BLOCK_ID && scause == SCAUSE_STORE_PF) {
+                    priv->urvb_block_id = store_data;
+                    if ((*(char *) pc) & 0b11 == 0b11)
+                        ucontext->uc_mcontext.__gregs[0] += 4;
+                    else
+                        ucontext->uc_mcontext.__gregs[0] += 2;
+                } else if (pa == URVIRT_BLOCK + URVIRT_BLOCK_BUF && scause == SCAUSE_STORE_PF) {
+                    priv->urvb_buf = store_data;
+                    if ((*(char *) pc) & 0b11 == 0b11)
+                        ucontext->uc_mcontext.__gregs[0] += 4;
+                    else
+                        ucontext->uc_mcontext.__gregs[0] += 2;
+                } else {
+                    printf("[urvirt] Page fault, sepc=0x%zx, rs2=x%d, va=0x%zx, pa=0x%zx, scause=%d cannot handle\n",
+                        (size_t) pc, decode_sd((char *) pc),
+                        stval, pa, scause
+                    );
+
+                    asm("ebreak");
+                }
             }
         }
     } else {

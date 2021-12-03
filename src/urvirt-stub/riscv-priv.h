@@ -28,6 +28,10 @@ struct priv_state {
     uintptr_t sie;
     uintptr_t satp;
 
+    // URVirt block device
+    uintptr_t urvb_block_id;
+    uintptr_t urvb_buf;
+
     // Should we reset virtual memory mappings before returning from signal
     // handler and executing the next instruction?
     bool should_clear_vm;
@@ -44,4 +48,3 @@ void enter_trap(struct priv_state *priv, ucontext_t *ucontext, uintptr_t scause,
 //
 // \param stval The faulting address
 void handle_page_fault(struct priv_state *priv, ucontext_t *ucontext, uintptr_t scause, uintptr_t stval);
-

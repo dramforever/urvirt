@@ -6,6 +6,7 @@
 static const int CONFIG_FD = 64;
 static const int RAM_FD = 65;
 static const int KERNEL_FD = 66;
+static const int BLOCK_FD = 67;
 
 static const size_t RAM_START = 0x80000000;
 static const size_t RAM_SIZE = 16ul << 20;
