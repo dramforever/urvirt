@@ -31,7 +31,19 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
         // Fix a7 register
         regs[17] = which;
 
+        if (regs[10] == 0xdeadbeefdeadbeefUL) {
+            // magic ecall
+            printf("[urvirt] counters\n");
+            printf("  ill = %zd\n", priv->counter_ill);
+            printf("  segv = %zd\n", priv->counter_segv);
+            printf("  sret = %zd\n", priv->counter_sret);
+            printf("  uecall = %zd\n", priv->counter_uecall);
+            printf("  secall = %zd\n", priv->counter_secall);
+        }
+
         if (priv->priv_mode == PRIV_S) {
+            priv->counter_secall ++;
+
             // SBI call, only legacy ones for now
             uintptr_t ret = handle_legacy_sbi_call(
                 priv, which, regs[10], regs[11], regs[12]
@@ -39,6 +51,8 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
 
             regs[10] = ret;
         } else {
+            priv->counter_uecall ++;
+
             // It's ecall in U-mode, trap to S-mode
             // Fix pc
             // SIGSYS: pc *after* ecall insn
@@ -46,7 +60,10 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
             regs[0] -= 4;
             enter_trap(priv, ucontext, SCAUSE_UECALL, 0);
         }
+
     } else if (sig == SIGILL) {
+        priv->counter_ill ++;
+
         if (priv->priv_mode == PRIV_S) {
             // Illegal instruction in S-mode
             // Maybe emulate privileged instruction?
@@ -74,6 +91,8 @@ void handler(int sig, siginfo_t *info, void *ucontext_voidp) {
         }
 
     } else if (sig == SIGSEGV) {
+        priv->counter_segv ++;
+
         uintptr_t scause;
         char *pc = (char *) ucontext->uc_mcontext.__gregs[0];
 

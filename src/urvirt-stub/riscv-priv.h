@@ -35,6 +35,12 @@ struct priv_state {
     // Should we reset virtual memory mappings before returning from signal
     // handler and executing the next instruction?
     bool should_clear_vm;
+
+    uintptr_t counter_ill;
+    uintptr_t counter_segv;
+    uintptr_t counter_sret;
+    uintptr_t counter_uecall;
+    uintptr_t counter_secall;
 };
 
 void initialize_priv(struct priv_state *priv);

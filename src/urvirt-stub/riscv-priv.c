@@ -34,6 +34,12 @@ void initialize_priv(struct priv_state *priv) {
     priv->sstatus = set_sstatus_fs(priv->sstatus, SSTATUS_XS_DIRTY);
     priv->sstatus = set_sstatus_xs(priv->sstatus, SSTATUS_XS_DIRTY);
     priv->sstatus = set_sstatus_sd(priv->sstatus, 1);
+
+    priv->counter_ill = 0;
+    priv->counter_segv = 0;
+    priv->counter_sret = 0;
+    priv->counter_uecall = 0;
+    priv->counter_secall = 0;
 }
 
 uintptr_t read_csr(struct priv_state *priv, uint32_t csr) {
@@ -115,6 +121,9 @@ void handle_priv_instr(struct priv_state *priv, ucontext_t *ucontext, uint32_t i
                 && ins_rs1(instr) == 0 && ins_rd(instr) == 0) {
 
                 // sret
+
+                priv->counter_sret ++;
+
                 uintptr_t spp = get_sstatus_spp(priv->sstatus);
 
                 priv->sstatus = set_sstatus_sie(priv->sstatus, get_sstatus_spie(priv->sstatus));
