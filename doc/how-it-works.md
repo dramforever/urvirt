@@ -331,8 +331,8 @@ end we have the leaf PTE of the desired emulated virtual address.
 We now have the emulated physical address of the access. If the access should be
 permitted according to the PTE:
 
-- If the address is in RAM, map `RAM_FD` to that virtual address, and retry the
-  access. Now it should succeed.
+- If the address is in RAM, map page from `RAM_FD` at the desired offset to the
+  faulting virtual address, and retry the access. Now it should succeed.
 - If the address is some MMIO, handle as described in the next section.
 - Otherwise it's an access fault
 
@@ -343,6 +343,43 @@ Access to other pages are handled in a similar way.
 On every further execution of `sfence.vma`, switching between S and U modes, and
 writing `satp`, we unmap everything again to start afresh. Effectively, we're
 using the Linux memory management system calls as a TLB.
+
+For example, suppose we have a load instruction `ld a1, 0(a0)`, from a certain
+virtual address, `va` that should correspond to RAM. It has the appropriate
+permissions. Since the previous `sfence.vma`, this page has not yet been
+accessed.
+
+- The `ld a1, 0(a0)` instruction is issued.
+- The hardware looks in the page table set up by Linux. There's no corresponding
+  entry and a page fault is raised.
+- Linux handles it and raises a `SIGSEGV` to the process.
+- The signal handler catches this and gets from the `si_addr` field from
+  `siginfo_t`.
+- URVirt itself stores the guest's `satp`, so it knows where the guest OS's
+  page table is. It looks through the guest's page table from emulated RAM
+  (`RAM_FD`) to find the corresponding (emulated) physical address.
+- The leaf PTE shows that the (emulated) physical address is in the RAM region,
+  with `offset` having `pa = RAM_BASE + offset`.
+- URVirt uses `mmap` to map the 4K-aligned region containing `offset` in
+  `RAM_FD` to the 4K-aligned region containing VA
+- Linux sees that `RAM_FD` is backed by RAM and modifies the 'real' page table
+  to contain the entry from the page containing `va` to the (real) physical
+  address of `RAM_FD` in physical RAM and returns from the system call
+  sucessfully.
+- URVirt returns from the signal handler back to the `ld` instruction.
+- The `ld a1, 0(a0)` instruction is issued (again).
+- The hardware looks in the page table set up by Linux and finds the entry just
+  inserted.
+- The doubleword is loaded from physical memory.
+- Execution of the guest OS proceeds normally.
+
+The next access to the same page is much faster?
+
+- The load instruction is issued.
+- The hardware looks in the page table set up by Linux and finds the entry
+  inserted while first accessing this page.
+- The doubleword is loaded from physical memory.
+- Execution of the guest OS proceeds normally.
 
 ## Emulated block devices
 
