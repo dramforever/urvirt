@@ -3,6 +3,7 @@
 #include <ucontext.h>
 #include <syscall.h>
 #include <fcntl.h>
+#include <sys/prctl.h>
 
 #include "common.h"
 #include "urvirt-syscalls.h"
@@ -248,6 +249,7 @@ void entrypoint_1(void *sigstack_start, struct urvirt_config *conf) {
     prog.filter = filt;
     prog.len = gen_addr_filter((size_t) (conf->stub_start), (size_t) (conf->stub_start + conf->stub_size), filt);
 
+    s_prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
     int ret = s_seccomp(SECCOMP_SET_MODE_FILTER, 0, &prog);
 
     if (ret < 0) {

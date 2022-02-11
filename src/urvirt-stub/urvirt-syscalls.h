@@ -8,7 +8,7 @@
 
 #include "internal-syscall.h"
 
-// See linux source code, include/uapi/asm-generic/signal.h
+// See Linux source code, include/uapi/asm-generic/signal.h
 struct kernel_sigaction {
 	union {
 		void (*_sa_handler)(int);
@@ -17,6 +17,14 @@ struct kernel_sigaction {
 	uintptr_t sa_flags;
 	sigset_t sa_mask;
 };
+
+// See Linux source code, include/uapi/linux/prctl.h
+#define PR_SET_SYSCALL_USER_DISPATCH	59
+# define PR_SYS_DISPATCH_OFF		0
+# define PR_SYS_DISPATCH_ON		1
+/* The control values for the user space selector when dispatch is enabled */
+# define SYSCALL_DISPATCH_FILTER_ALLOW	0
+# define SYSCALL_DISPATCH_FILTER_BLOCK	1
 
 inline void s_exit_group(int status) {
     internal_syscall(SYS_exit_group, 1, (uintptr_t) status, /* ... */ 0, 0, 0, 0, 0);
@@ -71,9 +79,13 @@ inline int s_fcntl(int fd, int cmd, int arg) {
 inline ssize_t s_pread64(int fd, void *buf, size_t count, off_t offset) {
     return internal_syscall(SYS_pread64, 4, (uintptr_t) fd, (uintptr_t) buf, (uintptr_t) count, (uintptr_t) offset, /* ... */ 0, 0);
 }
+
 inline ssize_t s_pwrite64(int fd, const void *buf, size_t count, off_t offset) {
     return internal_syscall(SYS_pwrite64, 4, (uintptr_t) fd, (uintptr_t) buf, (uintptr_t) count, (uintptr_t) offset, /* ... */ 0, 0);
 }
 
+inline ssize_t s_prctl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5) {
+    return internal_syscall(SYS_prctl, 5, (uintptr_t) option, (uintptr_t) arg2, (uintptr_t) arg3, (uintptr_t) arg4, (uintptr_t) arg5, /* ... */ 0);
+}
 
 #define write_log(str) do { s_write(2, "[urvirt] " str "\n", sizeof("[urvirt] " str "\n") - 1); } while(0)
